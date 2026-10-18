@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+:root {
+  /* Named tokens from the design plan */
+  --background: #eff6ff; /* Sky tint */
+  --foreground: #1e3a8a; /* Navy */
+  --card: #ffffff;
+  --card-foreground: #1e3a8a;
+  --popover: #ffffff;
+  --popover-foreground: #1e3a8a;
+  --primary: #1e40af; /* Royal blue */
+  --primary-foreground: #ffffff;
+  --secondary: #dbeafe;
+  --secondary-foreground: #1e40af;
+  --muted: #e9eff5;
+  --muted-foreground: #475569;
+  --accent: #16a34a; /* Service green */
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --border: #bfdbfe;
+  --input: #bfdbfe;
+  --ring: #1e40af;
+  --radius: 0.5rem;
+
+  /* Steel tones (reference language): washes and hairlines only, never text */
+  --steel: #6b8cae;
+  --steel-soft: rgba(107, 140, 174, 0.1);
+  --steel-fog: rgba(107, 140, 174, 0.16);
+  --steel-line: rgba(107, 140, 174, 0.32);
+  --fixed: #2e7d53; /* Fixed: success green, 5.0:1 on white */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-steel: var(--steel);
+  --color-steel-line: var(--steel-line);
+  --color-steel-soft: var(--steel-soft);
+  --color-steel-fog: var(--steel-fog);
+  --color-fixed: var(--fixed);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Lexend", "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 17px;
+    line-height: 1.65;
+  }
+  ::selection {
+    background: var(--steel-fog);
+  }
+}
+
+@layer utilities {
+  /* Hairline in the steel tone for dividers that carry structure */
+  .hairline-t {
+    border-top: 1px solid var(--steel-line);
+  }
+  .hairline-b {
+    border-bottom: 1px solid var(--steel-line);
+  }
+  .tile-wash {
+    background: var(--steel-soft);
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* PhoneCase device mockup: looping camera pill + gentle float.
+   Color drifts between primary blue and service green (design tokens). */
+@keyframes phone-call-transition {
+  0% {
+    width: 26%;
+    background-color: #1e3a8a;
+  }
+  100% {
+    width: 64%;
+    background-color: #14532d;
+  }
+}
+.phone-pill {
+  animation: phone-call-transition 1.9s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-pill {
+    animation: none;
+  }
+}
+.phone-shell {
+  animation: phone-shell-float 6s ease-in-out infinite alternate;
+}
+@keyframes phone-shell-float {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-shell {
+    animation: none;
+  }
+}
+/* Story-style progress segment for the active channel screen. Duration must
+   match SCREEN_DURATION in PhoneCase.tsx (2800ms per screen). */
+.phone-story-bar {
+  animation: phone-story-fill 2800ms linear forwards;
+}
+@keyframes phone-story-fill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-story-bar {
+    animation: none;
+    width: 100%;
+  }
+}
