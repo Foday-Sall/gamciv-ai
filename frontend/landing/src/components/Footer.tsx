@@ -1,45 +1,44 @@
-import { MessageSquare, Route, MapPin, CheckCircle2, Mail, ExternalLink } from "lucide-react"
+import { CheckCircle2, ExternalLink, Mail, MapPin, MessageSquare, Route } from "lucide-react"
 import GamCivMark from "@/components/GamCivMark"
 import GambiaFlag from "@/components/GambiaFlag"
 
 /* Footer: three-column grid on the brand's hairline discipline.
-   LEFT: logo + service description with the four action words carried by
-   small clay-tone Lucide icons. MIDDLE: in-page routing links under a small
-   heading. RIGHT: legal routes and contact. Bottom row: copyright left,
-   a national sign-off right. Sharp edges, no emojis, no em dashes. */
+   LEFT: brand block stacked on a flex column: logo + wordmark, the service
+   line, then a letterspaced kicker of the four action words, each led by a
+   small clay-tone Lucide icon, and a muted PocketSoftware line beneath.
+   MIDDLE: in-page routing links under a small heading. RIGHT: legal routes
+   and contact. Bottom row: copyright left, a national sign-off right.
+   Sharp edges, no emojis, no em dashes. */
+const VERBS: Array<[typeof MessageSquare, string]> = [
+  [MessageSquare, "Report"],
+  [Route, "Route"],
+  [MapPin, "Track"],
+  [CheckCircle2, "Resolve"],
+]
+
 export default function Footer() {
   return (
     <footer className="border-t border-border bg-card">
       <div className="mx-auto max-w-6xl px-5 py-12 md:px-8">
         <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_0.9fr] md:gap-8">
-          {/* Brand: description with the service's four verbs as icons */}
-          <div className="max-w-sm">
+          {/* Brand block: stacked composition, the four verbs as a kicker row */}
+          <div className="flex max-w-sm flex-col gap-3.5">
             <a href="/" className="flex items-center gap-2 text-lg font-bold tracking-tight font-display">
               <GamCivMark />
               GamCiv
             </a>
-            <p className="mt-3.5 text-sm leading-relaxed text-muted-foreground">
-              A public complaints service for The Gambia.{" "}
-              <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 align-baseline">
-                <span className="inline-flex items-center gap-1">
-                  <MessageSquare className="h-3.5 w-3.5 text-clay" strokeWidth={1.75} aria-hidden="true" />
-                  Report,
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Route className="h-3.5 w-3.5 text-clay" strokeWidth={1.75} aria-hidden="true" />
-                  route,
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5 text-clay" strokeWidth={1.75} aria-hidden="true" />
-                  track,
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-clay" strokeWidth={1.75} aria-hidden="true" />
-                  resolve.
-                </span>
-              </span>{" "}
-              A PocketSoftware service.
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              A public complaints service for The Gambia.
             </p>
+            <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-semibold uppercase tracking-widest text-foreground">
+              {VERBS.map(([Icon, verb]) => (
+                <span key={verb} className="inline-flex items-center gap-1.5">
+                  <Icon className="h-3.5 w-3.5 shrink-0 text-clay" strokeWidth={1.75} aria-hidden="true" />
+                  {verb}.
+                </span>
+              ))}
+            </p>
+            <p className="text-xs text-muted-foreground">A PocketSoftware service.</p>
           </div>
 
           {/* In-page routing */}
