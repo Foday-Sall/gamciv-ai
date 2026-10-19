@@ -5,7 +5,7 @@ import { Lift, Reveal } from "@/components/sections/shared"
 /* Final CTA: one primary action (the task), reassurance strip below. */
 export default function CTA() {
   return (
-    <section id="report" aria-labelledby="cta-heading">
+    <section id="report" className="scroll-mt-24" aria-labelledby="cta-heading">
       <div className="mx-auto max-w-2xl px-5 py-24 text-center md:px-8">
         <Reveal>
           <h2 id="cta-heading" className="text-balance text-3xl font-semibold tracking-tight font-display md:text-4xl">

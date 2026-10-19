@@ -49,16 +49,16 @@ const chatScript: ChatMessage[] = [
   { from: "user", text: "The drain on Kairaba Avenue is blocked. It floods whenever it rains." },
   {
     from: "agent",
-    text: "Noted. This is a KMC drainage issue. Reference #GC-2418. We have forwarded it to their works department.",
+    text: "Noted. This is a KMC drainage issue. Reference GC-2418. We have forwarded it to their works department.",
     meta: "Routed just now",
   },
-  { from: "user", text: "Any update on #GC-2418?" },
+  { from: "user", text: "Any update on GC-2418?" },
   {
     from: "agent",
     text: "KMC says a crew is scheduled this week. I will message you when it is done.",
     meta: "Status: in progress",
   },
-  { from: "agent", text: "Cleared today. #GC-2418 is closed.", meta: "Resolved" },
+  { from: "agent", text: "Cleared today. GC-2418 is closed.", meta: "Resolved" },
 ]
 
 const steps = [
@@ -70,25 +70,25 @@ const steps = [
   {
     n: "02",
     t: "GamCiv routes it",
-    d: "The system reads your report, understands what it is, and routes it straight to the office that owns the problem — KMC, NAWEC, NRA, NEA or the police desk. No wrong door, no runaround.",
+    d: "The system reads your report, understands what it is, and routes it straight to the office that owns the problem: KMC, NAWEC, NRA, NEA or the police desk. No wrong door, no runaround.",
   },
   {
     n: "03",
     t: "You get a reference",
-    d: "Your case gets a number the moment it is filed. Quote it any time and the system tells you exactly where things stand — no calling, no visiting, no guessing.",
+    d: "Your case gets a number the moment it is filed. Quote it any time and the system tells you exactly where things stand, with no calling, no visiting, and no guessing.",
   },
   {
     n: "04",
     t: "It is followed to a fix",
-    d: "Deadlines are set. If the office misses one, the case escalates on its own. You hear every step in the same chat until the day it is fixed — and you confirm it.",
+    d: "Deadlines are set. If the office misses one, the case escalates on its own. You hear every step in the same chat until the day it is fixed, and you confirm it.",
   },
 ]
 
 /* How it works + tracker case card. Steps are numbered entries on hairline
-   rules; the four channels sit as a single strip above them. */
+   rules (numbers in terracotta); the four channels sit as a single strip above them. */
 export default function HowItWorks() {
   return (
-    <section id="how" className="hairline-b" aria-labelledby="how-heading">
+    <section id="how" className="hairline-b scroll-mt-24" aria-labelledby="how-heading">
       <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 md:px-8 lg:grid-cols-[1fr_auto] lg:gap-16">
         <div>
           <h2 id="how-heading" className="max-w-xl text-balance text-3xl font-semibold tracking-tight font-display md:text-4xl">
@@ -122,7 +122,7 @@ export default function HowItWorks() {
             {steps.map((s) => (
               <motion.div key={s.t} variants={fadeUp()} className="hairline-t py-5">
                 <div className="flex items-baseline gap-4">
-                  <span className="font-display text-sm font-semibold text-accent tabular">{s.n}</span>
+                  <span className="font-display text-sm font-semibold text-terracotta tabular">{s.n}</span>
                   <div>
                     <h3 className="font-semibold tracking-tight">{s.t}</h3>
                     <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{s.d}</p>
@@ -135,7 +135,7 @@ export default function HowItWorks() {
 
         {/* Case card: the reference's tracker, as a working example */}
         <Reveal className="lg:w-88">
-          <div className="mb-6 rounded-none border-2 border-border bg-card">
+          <div id="track" className="mb-6 scroll-mt-24 rounded-none border-2 border-border bg-card">
             <div className="flex items-center gap-2.5 border-b border-border px-5 py-3.5">
               <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
               <span className="text-sm font-semibold">GamCiv Reports</span>

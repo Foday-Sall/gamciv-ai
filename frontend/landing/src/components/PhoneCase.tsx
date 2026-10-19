@@ -56,7 +56,7 @@ const WA_SCRIPT = [
   { from: "user" as const, text: "The drain on Kairaba Avenue is blocked. It floods every rain.", time: "09:41" },
   {
     from: "agent" as const,
-    text: "Noted — KMC drainage issue. Reference #GC-2418. Forwarded to their works department.",
+    text: "Noted: KMC drainage issue. Reference GC-2418. Forwarded to their works department.",
     time: "09:41",
   },
   {
@@ -64,7 +64,7 @@ const WA_SCRIPT = [
     text: "A crew is scheduled this week. I will message you when it is done.",
     time: "09:42",
   },
-  { from: "user" as const, text: "Any update on #GC-2418?", time: "10:03" },
+  { from: "user" as const, text: "Any update on GC-2418?", time: "10:03" },
 ]
 
 function WhatsAppScreen({ static: isStatic }: { static?: boolean }) {
@@ -130,7 +130,7 @@ function WhatsAppScreen({ static: isStatic }: { static?: boolean }) {
           >
             <div className="rounded-lg rounded-bl-sm bg-white px-2 py-1.5 shadow-sm">
               <p className="text-[8.5px] leading-snug text-neutral-800">
-                Cleared today. #GC-2418 is closed.
+                Cleared today. GC-2418 is closed.
               </p>
               <div className="mt-1 flex items-center justify-between gap-1">
                 <span className="rounded-full bg-[#DCFCE7] px-1.5 py-px text-[6.5px] font-semibold text-[#15803D]">
@@ -184,8 +184,8 @@ function SmsScreen({ static: isStatic }: { static?: boolean }) {
     >
       {/* SMS header */}
       <div className="flex items-center gap-2 border-b border-neutral-200 bg-white px-2.5 py-2">
-        <ChevronLeft className="h-3 w-3 text-[#1E40AF]" />
-        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1E40AF]">
+        <ChevronLeft className="h-3 w-3 text-[#2A1B10]" />
+        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2A1B10]">
           <MessageSquare className="h-3 w-3 text-white" strokeWidth={2.2} />
         </div>
         <div className="min-w-0">
@@ -207,7 +207,7 @@ function SmsScreen({ static: isStatic }: { static?: boolean }) {
               <div
                 className={
                   m.out
-                    ? "rounded-2xl rounded-br-sm bg-[#1E40AF] px-2 py-1.5"
+                    ? "rounded-2xl rounded-br-sm bg-[#2A1B10] px-2 py-1.5"
                     : "rounded-2xl rounded-bl-sm bg-white px-2 py-1.5 shadow-sm"
                 }
               >
@@ -239,7 +239,7 @@ const TG_NOTIFS = [
     bg: "rgba(34,158,217,0.14)",
     title: "GamCiv Bot",
     time: "09:41",
-    body: "Report #GC-2418 received — routed to KMC. Send the reference any time to track it.",
+    body: "Report GC-2418 received: routed to KMC. Send the reference any time to track it.",
   },
   {
     icon: Bell,
@@ -362,7 +362,7 @@ function WebAppScreen({ static: isStatic }: { static?: boolean }) {
           className="mt-1.5 rounded-md bg-white p-2 shadow-sm"
         >
           <div className="flex items-center justify-between gap-1">
-            <p className="text-[8px] font-semibold text-neutral-900">Blocked drain — Kairaba Ave</p>
+            <p className="text-[8px] font-semibold text-neutral-900">Blocked drain, Kairaba Ave</p>
             <span className="shrink-0 rounded-full bg-[#DCFCE7] px-1.5 py-px text-[6px] font-semibold text-[#15803D]">
               Resolved
             </span>
@@ -383,7 +383,7 @@ function WebAppScreen({ static: isStatic }: { static?: boolean }) {
               key={p}
               className={`flex-1 rounded-md border px-1 py-1 text-center text-[6.5px] font-medium ${
                 i === 3
-                  ? "border-[#1E40AF] bg-[#1E40AF] text-white"
+                  ? "border-[#9C6A00] bg-[#D99A00] text-[#26180C]"
                   : "border-neutral-200 bg-white text-neutral-500"
               }`}
             >
@@ -395,7 +395,7 @@ function WebAppScreen({ static: isStatic }: { static?: boolean }) {
       {/* Page bottom bar */}
       <div className="flex items-center justify-between border-t border-neutral-200 bg-white px-4 py-1.5">
         <Home className="h-2.5 w-2.5 text-neutral-400" />
-        <Search className="h-2.5 w-2.5 text-[#1E40AF]" />
+        <Search className="h-2.5 w-2.5 text-[#9C6A00]" />
         <Building2 className="h-2.5 w-2.5 text-neutral-400" />
       </div>
     </motion.div>
@@ -417,7 +417,7 @@ const SCREENS = [
     id: "sms",
     label: "SMS",
     icon: MessageSquare,
-    accent: "#1E40AF",
+    accent: "#9C6A00",
     badge: "any phone",
     Component: SmsScreen,
   },
@@ -433,7 +433,7 @@ const SCREENS = [
     id: "web",
     label: "Web",
     icon: Globe,
-    accent: "#1E40AF",
+    accent: "#9C6A00",
     badge: "in browser",
     Component: WebAppScreen,
   },
@@ -442,7 +442,7 @@ const SCREENS = [
 /* --------------------------------- component --------------------------------- */
 
 /**
- * PhoneCase — device mockup that behaves like a real phone: one full-width
+ * PhoneCase, a device mockup that behaves like a real phone: one full-width
  * channel screen at a time (WhatsApp chat → SMS → Telegram notifications →
  * web app), auto-advancing every ~3s with story-style progress segments.
  * With reduced motion: a single static screen, no transitions. Decorative;
@@ -487,8 +487,8 @@ export default function PhoneCase() {
   return (
     <div ref={shellRef} className={`relative ${reduce ? "" : "phone-shell"}`} aria-hidden="true">
       {/* Frame */}
-      <div className="w-52 rounded-[24px] border border-white/15 bg-zinc-950 p-2 shadow-[0_20px_50px_-18px_rgba(30,58,138,0.45)]">
-        <div className="overflow-hidden rounded-[16px] bg-[#0b1226]">
+      <div className="w-52 rounded-[24px] border border-white/15 bg-zinc-950 p-2 shadow-[0_20px_50px_-18px_rgba(42,27,16,0.45)]">
+        <div className="overflow-hidden rounded-[16px] bg-[#1C130B]">
           {/* Screen top: camera pill + Gambia flag */}
           <div className="px-3 pt-2.5 pb-1">
             <div className="flex items-center justify-between">
@@ -532,7 +532,7 @@ export default function PhoneCase() {
             </motion.div>
           </div>
 
-          {/* Rotating channel screens — one full-width app at a time */}
+          {/* Rotating channel screens, one full-width app at a time */}
           <div className="relative h-[336px]">
             {reduce ? (
               <Current.Component static />

@@ -2,9 +2,10 @@ import { useEffect, useState } from "react"
 import { motion, useReducedMotion } from "motion/react"
 import { EASE } from "@/components/sections/shared"
 
-/* National three-beat headline, per the Caserta/Allentown civic pattern:
-   short declarative beats, the last one (the outcome) carried by the service
-   green. Word-by-word reveal, disabled under reduced motion. */
+/* National three-beat headline, in the warm civic voice: short declarative
+   beats, the last one (the outcome) carried by terracotta, warm and legible
+   (5.2:1 on sand), unlike gold which is decorative-only at display sizes.
+   Word-by-word reveal, disabled under reduced motion. */
 const HEADLINE_WORDS = [
   { w: "Your", beat: false },
   { w: "street.", beat: false },
@@ -35,7 +36,7 @@ export default function AnimatedHeadline() {
       {HEADLINE_WORDS.map((word, i) => (
         <motion.span
           key={i}
-          className={"inline-block " + (word.beat ? "text-accent" : "")}
+          className={"inline-block " + (word.beat ? "text-terracotta" : "")}
           initial={reduce ? false : { opacity: 0, filter: "blur(12px)", y: 26 }}
           animate={shown > i ? { opacity: 1, filter: "blur(0px)", y: 0 } : undefined}
           transition={{ duration: 0.65, ease: EASE }}
