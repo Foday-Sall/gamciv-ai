@@ -75,7 +75,7 @@ id).
 }
 ```
 
-Side effect on claim: row moves `queued → sending` (a later claim returns null).
+Side effect on claim: row moves `pending → sending` (a later claim returns null).
 
 ## 3. `notify_out_result` — called by notify-out
 

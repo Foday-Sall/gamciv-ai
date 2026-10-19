@@ -51,8 +51,13 @@ export interface SubmitComplaintResult {
   group_id: number | null;
 }
 
-export type NotificationChannel = "whatsapp" | "sms";
-export type NotificationStatus = "queued" | "sent" | "failed" | "partial" | "sending";
+/** Mirrors the DB enum notif_channel (0001_schema.sql). */
+export type NotificationChannel = "whatsapp" | "sms" | "email";
+/**
+ * Mirrors the DB enum notif_status: pending (awaiting pickup), sent, failed
+ * (+ 'sending', added in 0010c_columns.sql, while the worker holds the claim).
+ */
+export type NotificationStatus = "pending" | "sent" | "failed" | "sending";
 
 export interface NotificationRow {
   id: number;
@@ -87,7 +92,7 @@ export interface NotifyOutRequest {
 
 export interface NotifyOutResult {
   status: "sent" | "failed" | "noop";
-  channel?: "whatsapp" | "sms";
+  channel?: NotificationChannel;
   provider_ref?: string | null;
   reason?: string;
 }

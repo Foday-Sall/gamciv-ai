@@ -22,6 +22,7 @@ import {
   verifyGowaSignature,
 } from "../_shared/gowaClient.ts";
 import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { bounded, bodyTooLarge, FIELD_LIMITS } from "../_shared/limits.ts";
 import { PostgrestRpcClient, type RpcClient } from "../_shared/rpcClient.ts";
 import type {
   ComplaintUrgency,
@@ -84,6 +85,12 @@ export async function handleRequest(
   }
   if (!(await verifyGowaSignature(raw, signature, webhookSecret))) {
     return errorResponse(401, "invalid webhook signature");
+  }
+
+  // Reject oversized bodies before parsing (signature verified above, so
+  // this is an authenticated delivery with anomalous size — refuse it).
+  if (bodyTooLarge(raw.byteLength)) {
+    return errorResponse(413, "request body too large");
   }
 
   const envelope = parseGowaEnvelope(new TextDecoder().decode(raw));
@@ -153,25 +160,28 @@ export async function processReport(
   }
 
   // 2) ONE hop into the DB — routing, deadlines, grouping all live in SQL.
+  //    Field sizes are capped here AND re-checked in the SQL wrapper.
   const args: SubmitComplaintArgs = {
-    p_title: makeTitle(msg.body),
-    p_description: msg.body,
-    p_category_hint: categoryHint,
+    p_title: bounded(makeTitle(msg.body), FIELD_LIMITS.title) ?? null,
+    p_description: bounded(msg.body, FIELD_LIMITS.description) ?? "",
+    p_category_hint: bounded(categoryHint, FIELD_LIMITS.categoryHint),
     p_urgency_hint: urgencyHint,
     p_lat: msg.lat,
     p_lng: msg.lng,
     p_region: null,
     p_council_area: null,
     p_ward: null,
-    p_photo_url: msg.imageUrl,
+    p_photo_url: msg.imageUrl
+      ? bounded(msg.imageUrl, FIELD_LIMITS.photoUrl, { trim: false })
+      : null,
     p_channel: "whatsapp",
-    p_citizen_name: msg.name,
-    p_citizen_phone: msg.phone,
+    p_citizen_name: bounded(msg.name, FIELD_LIMITS.citizenName),
+    p_citizen_phone: bounded(msg.phone, FIELD_LIMITS.citizenPhone, { trim: false }),
     p_is_anonymous: false,
-    p_ai_category: categoryHint,
+    p_ai_category: bounded(categoryHint, FIELD_LIMITS.categoryHint),
     p_ai_urgency: urgencyHint,
     p_confidence: confidence,
-    p_external_id: msg.messageId,
+    p_external_id: bounded(msg.messageId, FIELD_LIMITS.externalId, { trim: false }),
   };
   const result = await deps.rpc.call<SubmitComplaintArgs, SubmitComplaintResult>(
     "submit_complaint",

@@ -168,6 +168,29 @@ Deno.test("handleRequest: rejects bad signature", async () => {
   assertEquals(res.status, 401);
 });
 
+Deno.test("handleRequest: oversized body rejected 413 before parsing", async () => {
+  const { deps, recorded } = makeDeps();
+  const res = await handleRequest(
+    await signedRequestAsync("x".repeat(513 * 1024)),
+    deps,
+    "whsec",
+  );
+  assertEquals(res.status, 413);
+  assertEquals(recorded.rpcCalls.length, 0);
+});
+
+Deno.test("processReport: oversized fields are truncated to the shared limits", async () => {
+  const { deps, recorded } = makeDeps();
+  const longBody = "no water ".repeat(300); // 2700 chars > 2000 limit
+  const msg = makeMsg({ body: longBody, name: "N".repeat(150) });
+  await processReport(msg, deps);
+  const args = recorded.rpcCalls[0].args as SubmitComplaintArgs;
+  assertEquals(args.p_description.length, 2000);
+  assertEquals(args.p_citizen_name!.length, 100);
+  // makeTitle caps the first line at 80 (inner function), outer bounded() keeps it ≤ 200
+  assertEquals(args.p_title!.length, 80);
+});
+
 Deno.test("handleRequest: onboards a bare greeting without filing", async () => {
   const body = JSON.stringify({
     event: "message",

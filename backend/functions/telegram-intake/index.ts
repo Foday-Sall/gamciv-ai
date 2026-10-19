@@ -19,15 +19,18 @@
 import { FetchAiClient, loadAiConfig } from "../_shared/aiClient.ts";
 import { loadAppConfig } from "../_shared/config.ts";
 import { errorResponse, jsonResponse, timingSafeEqualStr } from "../_shared/http.ts";
+import { bounded, bodyTooLarge, FIELD_LIMITS } from "../_shared/limits.ts";
 import { PostgrestRpcClient, type RpcClient } from "../_shared/rpcClient.ts";
 import type {
   ComplaintUrgency,
   SubmitComplaintArgs,
   SubmitComplaintResult,
 } from "../_shared/types.ts";
+import { storePhotoFromUrl } from "./photoStorage.ts";
 import {
   extractReport,
   FetchTelegramClient,
+  PHOTO_PREFIX,
   parseUpdate,
   type TelegramClient,
   type TelegramReport,
@@ -93,7 +96,14 @@ export async function handleRequest(
     return errorResponse(401, "invalid webhook secret token");
   }
 
-  const update = parseUpdate(new TextDecoder().decode(await req.arrayBuffer()));
+  const raw = new Uint8Array(await req.arrayBuffer());
+  // Reject oversized bodies before any parsing (provider posts stay well under
+  // this; anything bigger is abuse, not a Telegram update).
+  if (bodyTooLarge(raw.byteLength)) {
+    return errorResponse(413, "request body too large");
+  }
+
+  const update = parseUpdate(new TextDecoder().decode(raw));
   if (!update) return errorResponse(400, "invalid JSON body");
 
   const report = extractReport(update);
@@ -124,11 +134,15 @@ export async function processReport(
   report: TelegramReport,
   deps: TelegramIntakeDeps,
 ): Promise<Outcome> {
-  // 1) Resolve the photo file_id to a downloadable URL via Bot API getFile.
-  //    Failure is not fatal: the report is filed text-only rather than lost.
+  // 1) Photo pipeline: the Telegram download URL embeds the bot token and
+  //    expires in ~1h, so it must never be persisted. Resolve file_id → URL,
+  //    immediately pull the bytes and store them in the private
+  //    complaint-photos bucket, then persist only the token-free object
+  //    reference. Every failure degrades to a token-free fallback reference
+  //    (or null) — a photo problem never fails the intake.
   let photoUrl: string | null = null;
   if (report.photoFileId) {
-    photoUrl = await deps.telegram.getPhotoUrl(report.photoFileId);
+    photoUrl = await resolvePhotoReference(report, deps);
   }
 
   // 2) Classify (OpenAI-compatible chat completion). Failure is not fatal.
@@ -147,26 +161,27 @@ export async function processReport(
   }
 
   // 3) ONE hop into the DB — routing, deadlines, grouping all live in SQL.
+  //    Field sizes are capped here AND re-checked in the SQL wrapper.
   const args: SubmitComplaintArgs = {
-    p_title: makeTitle(report.body),
-    p_description: report.body,
-    p_category_hint: categoryHint,
+    p_title: bounded(makeTitle(report.body), FIELD_LIMITS.title) ?? null,
+    p_description: bounded(report.body, FIELD_LIMITS.description) ?? "",
+    p_category_hint: bounded(categoryHint, FIELD_LIMITS.categoryHint),
     p_urgency_hint: urgencyHint,
     p_lat: report.lat,
     p_lng: report.lng,
     p_region: null,
     p_council_area: null,
     p_ward: null,
-    p_photo_url: photoUrl,
+    p_photo_url: photoUrl ? bounded(photoUrl, FIELD_LIMITS.photoUrl, { trim: false }) : null,
     p_channel: FALLBACK_CHANNEL,
-    p_citizen_name: report.name,
+    p_citizen_name: bounded(report.name, FIELD_LIMITS.citizenName),
     // Telegram never exposes the user's phone number — null by design.
     p_citizen_phone: null,
     p_is_anonymous: report.name === null,
-    p_ai_category: categoryHint,
+    p_ai_category: bounded(categoryHint, FIELD_LIMITS.categoryHint),
     p_ai_urgency: urgencyHint,
     p_confidence: confidence,
-    p_external_id: report.externalId,
+    p_external_id: bounded(report.externalId, FIELD_LIMITS.externalId, { trim: false }),
   };
   const result = await deps.rpc.call<SubmitComplaintArgs, SubmitComplaintResult>(
     "submit_complaint",
@@ -204,6 +219,37 @@ export function confirmationText(r: SubmitComplaintResult): string {
     `Received. Reference ${r.tracking_no}. ` +
     `${r.institution_name ?? r.institution}${dept} is responsible. We will update you here.`
   );
+}
+
+/**
+ * file_id → token-free stored reference.
+ *
+ * getPhotoUrl returns a short-lived URL that embeds the bot token; we consume
+ * it in-process (download + bucket upload) and persist only the token-free
+ * object reference. If storage is not configured the fallback reference
+ * ("telegram/<fileId>") is stored instead — still token-free, re-resolvable
+ * at fetch time by a component that holds the bot token. The short-lived
+ * token-bearing URL itself is never written anywhere.
+ */
+async function resolvePhotoReference(
+  report: TelegramReport,
+  deps: TelegramIntakeDeps,
+): Promise<string | null> {
+  const providerUrl = await deps.telegram.getPhotoUrl(report.photoFileId!);
+  if (!providerUrl) return null;
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const objectPath = `${PHOTO_PREFIX}/${report.photoFileId}`;
+  if (!supabaseUrl || !serviceRoleKey) {
+    // Storage not reachable from this function: keep a token-free reference
+    // instead of the token-bearing URL. Comment stands until storage env is
+    // wired: the token must be added at fetch time to re-download.
+    console.error("storage env missing; storing token-free fallback reference");
+    return `${PHOTO_PREFIX}/${report.photoFileId}`;
+  }
+  const stored = await storePhotoFromUrl({ supabaseUrl, serviceRoleKey }, providerUrl, objectPath);
+  return stored.ref || null;
 }
 
 function makeTitle(desc: string): string {

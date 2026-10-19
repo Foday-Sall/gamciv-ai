@@ -5,6 +5,16 @@
 -- so the seeded data matches what production intake produces.
 -- ============================================================================
 
+-- ############################################################################
+-- #  DEMO / DEV ONLY -- NEVER RUN AGAINST A PRODUCTION DATABASE              #
+-- #                                                                          #
+-- #  This seed creates demo accounts whose password is public in the repo    #
+-- #  (originally 'DemoPass123!'). On 2026-10-19 the copies of these          #
+-- #  accounts on the LIVE database were hardened: passwords were rotated to  #
+-- #  random secrets and every account was banned (auth.users.banned_until    #
+-- #  = 2099), so they can no longer authenticate.                            #
+-- #  Safe to run only when standing up a throwaway demo environment.         #
+-- ############################################################################
 -- ---------- INSTITUTIONS ----------
 insert into public.institutions (code, name, type, is_dashboard, public_visible, contact) values
 

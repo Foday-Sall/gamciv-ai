@@ -76,7 +76,7 @@ export async function handleRequest(
   }
 
   // Claim the row so only one worker processes a notification
-  // (atomic UPDATE ... WHERE status='queued' FOR UPDATE SKIP LOCKED in SQL).
+  // (atomic UPDATE ... WHERE status='pending' FOR UPDATE SKIP LOCKED in SQL).
   const claim = await deps.rpc.call<Record<string, unknown>, ClaimRow | null>(
     "notify_out_claim",
     { p_notification_id: body.notification_id },
@@ -88,10 +88,20 @@ export async function handleRequest(
     });
   }
 
+  // Route on the claimed channel; email and anything unknown is explicitly
+  // failed (never silently sent via WhatsApp).
   if (claim.channel === "sms") {
     return guardedSend(deps, claim, () => sendSms(deps, claim));
   }
-  return guardedSend(deps, claim, () => sendWhatsapp(deps, claim));
+  if (claim.channel === "whatsapp") {
+    return guardedSend(deps, claim, () => sendWhatsapp(deps, claim));
+  }
+  return guardedSend(deps, claim, () =>
+    recordAndRespond(
+      deps.rpc,
+      claim,
+      `channel "${String(claim.channel)}" is not yet supported by notify-out`,
+    ));
 }
 
 /** Wrap a provider call: unexpected errors are recorded as failed, not thrown. */
@@ -192,7 +202,8 @@ async function recordFailure(
 export interface ClaimRow {
   /** UUID of the notifications row (string form). */
   notification_id: string;
-  channel: "whatsapp" | "sms";
+  /** DB enum notif_channel; notify-out sends whatsapp/sms, fails others. */
+  channel: "whatsapp" | "sms" | "email" | string;
   recipient: string | null;
   message: string | null;
 }
