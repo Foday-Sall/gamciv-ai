@@ -6,6 +6,9 @@ architecture lock, edge functions are **thin connectors only**:
 - **whatsapp-intake** — GOWA webhook → verify HMAC → extract report → classify via an
   OpenAI-compatible chat completion → ONE `rpc submit_complaint` call → GOWA confirmation message.
   All routing/deadline/grouping logic lives in the SQL function.
+- **meta-whatsapp-intake** — same pipeline for the Meta WhatsApp Business Cloud API
+  (plug-in ready: works, awaiting API key + phone number ID).
+- **telegram-intake** — same pipeline for the Telegram bot channel.
 - **notify-out** — DB (pg_net) → single POST → GOWA (WhatsApp) or the configured SMS provider
   (Termii, or a TextBee-style Android HTTP gateway), with the delivery result reported back via
   `rpc notify_out_result`.
@@ -13,12 +16,30 @@ architecture lock, edge functions are **thin connectors only**:
 Everything else (citizen tracking, officer queue, admin, public map) is plain PostgREST from the
 frontend — no functions involved.
 
+## Messaging channels
+
+Per-channel documentation lives in [`channels/`](channels/) — one self-contained folder per
+channel with setup notes and pointers to the function source (the deploy layout below is
+unaffected):
+
+- [`channels/whatsapp/`](channels/whatsapp/) — personal WhatsApp via GOWA (live)
+- [`channels/whatsapp-business/`](channels/whatsapp-business/) — Meta Cloud API (plug-in ready)
+- [`channels/telegram/`](channels/telegram/) — Telegram bot
+- [`channels/sms/`](channels/sms/) — outbound SMS, Android gateway primary + Termii fallback
+  ([`channels/sms/providers/`](channels/sms/providers/))
+
 ```
+channels/         # per-channel docs + pointers to the function source (this is docs only)
+  whatsapp/           # personal WhatsApp via GOWA
+  whatsapp-business/  # Meta Cloud API (plug-in ready)
+  telegram/           # Telegram bot
+  sms/                # outbound SMS; providers/ = android-gateway, termii, provider-selection
 functions/
   main/           # dispatcher (upstream Supabase self-hosted template; routes
                   # /functions/v1/<name> to a user worker per function dir)
   _shared/        # aiClient, gowaClient, termii, rpcClient, config, http, types
   whatsapp-intake/
+  meta-whatsapp-intake/
   telegram-intake/
   notify-out/     # smsProvider.ts: termii or http_gateway (TextBee-style) via SMS_PROVIDER
 tests/            # deno test (unit, stubbed network)
