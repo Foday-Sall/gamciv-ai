@@ -471,3 +471,13 @@ export async function handleRequest(
   }
 }
 
+// Entry point for the Supabase edge-runtime container: the function body above
+// is exercised by tests via handleRequest(req, deps); this wires it to the
+// server the same way the other functions do.
+Deno.serve((req: Request) =>
+  handleRequest(req, buildDeps()).catch((e) => {
+    console.error("unhandled auth-verify error:", e);
+    return errorResponse(500, "Something went wrong. Try again.");
+  })
+);
+
