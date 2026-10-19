@@ -9,11 +9,11 @@ Deno.test("parses strict JSON", () => {
   assertEquals(r.confidence, 0.9);
 });
 
-Deno.test("parses JSON fenced in a markdown block", () => {
+Deno.test("parses JSON fenced in a markdown block and normalizes legacy category", () => {
   const r = parseClassification(
     'Here you go:\n```json\n{"category":"waste","urgency":"low","confidence":0.7}\n```',
   );
-  assertEquals(r.category, "waste");
+  assertEquals(r.category, "waste_collection");
   assertEquals(r.urgency, "low");
 });
 
@@ -49,6 +49,61 @@ Deno.test("throws when no JSON at all", () => {
 
 Deno.test("throws when category missing", () => {
   assertThrows(() => parseClassification('{"urgency":"low","confidence":0.5}'), Error, "category");
+});
+
+// ---------------------------------------------------------------------------
+// Category normalization regression tests (canonical slugs from db/0009_seed.sql)
+// ---------------------------------------------------------------------------
+
+Deno.test("maps every legacy alias to its canonical slug", () => {
+  const aliases: Record<string, string> = {
+    waste: "waste_collection",
+    dumping: "illegal_dumping",
+    local_road: "local_roads",
+    national_road: "national_roads",
+    health_facility: "public_health",
+    crime_safety: "crime_report",
+    fire_hazard: "emergency_fire",
+    drainage: "local_roads",
+    bridge: "national_roads",
+    environment: "pollution",
+    road_signs: "traffic_signs",
+  };
+  for (const [alias, expected] of Object.entries(aliases)) {
+    const r = parseClassification(
+      `{"category":"${alias}","urgency":"high","confidence":0.8}`,
+    );
+    assertEquals(r.category, expected, `alias ${alias} should map to ${expected}`);
+    assertEquals(r.urgency, "high");
+    assertEquals(r.confidence, 0.8);
+  }
+});
+
+Deno.test("unknown category maps to other with confidence capped at 0.49", () => {
+  const r = parseClassification('{"category":"land","urgency":"normal","confidence":0.95}');
+  assertEquals(r.category, "other");
+  assertEquals(r.confidence, 0.49);
+});
+
+Deno.test("unknown category with already-low confidence stays capped at 0.49", () => {
+  const r = parseClassification('{"category":"business_permit","urgency":"low","confidence":0.2}');
+  assertEquals(r.category, "other");
+  assertEquals(r.confidence, 0.2);
+});
+
+Deno.test("valid canonical category is passed through unchanged", () => {
+  const r = parseClassification(
+    '{"category":"emergency_police","urgency":"critical","confidence":0.92}',
+  );
+  assertEquals(r.category, "emergency_police");
+  assertEquals(r.urgency, "critical");
+  assertEquals(r.confidence, 0.92);
+});
+
+Deno.test("invalid urgency still falls back to normal during normalization", () => {
+  const r = parseClassification('{"category":"waste","urgency":"extreme","confidence":0.8}');
+  assertEquals(r.category, "waste_collection");
+  assertEquals(r.urgency, "normal");
 });
 
 Deno.test("extractJsonObject finds object after fenced text", () => {
