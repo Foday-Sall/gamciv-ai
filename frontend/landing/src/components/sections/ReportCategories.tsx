@@ -37,18 +37,18 @@ export default function ReportCategories() {
             <motion.div
               key={c.label}
               variants={fadeUp(16)}
-              className="rounded-lg border border-border bg-background p-4 transition-colors duration-200 hover:border-steel hover:tile-wash"
+              className="rounded-lg border border-border bg-background p-4 transition-colors duration-200 hover:border-clay hover:tile-wash"
             >
-              <c.icon className="h-5 w-5 text-steel" strokeWidth={1.75} aria-hidden="true" />
+              <c.icon className="h-5 w-5 text-primary" strokeWidth={1.75} aria-hidden="true" />
               <p className="mt-3 text-sm font-semibold tracking-tight">{c.label}</p>
-              <p className="mt-1 text-xs leading-snug text-slate-500">{c.example}</p>
+              <p className="mt-1 text-xs leading-snug text-muted-foreground">{c.example}</p>
             </motion.div>
           ))}
         </Stagger>
         <Reveal delay={0.15}>
           <div className="mt-8 flex flex-col gap-4 rounded-xl border border-border bg-background p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-dashed border-steel-line bg-background text-steel">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-dashed border-clay-line bg-background text-clay">
                 <ImagePlus className="h-4 w-4" aria-hidden="true" />
               </span>
               <p className="text-sm text-muted-foreground">

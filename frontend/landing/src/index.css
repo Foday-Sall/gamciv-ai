@@ -1,33 +1,43 @@
 @import "tailwindcss";
 
 :root {
-  /* Named tokens from the design plan */
-  --background: #eff6ff; /* Sky tint */
-  --foreground: #1e3a8a; /* Navy */
+  /* "Sunrise over the river", a warm civic palette.
+     Sand/bone paper, espresso ink, deep river green as the institutional
+     primary, gold for action highlights. Blue lives only in the flag and in
+     the third-party screens inside the phone (WhatsApp/SMS/Telegram). */
+  --background: #f9f4e8; /* Sand paper */
+  --foreground: #2a1b10; /* Espresso ink */
   --card: #ffffff;
-  --card-foreground: #1e3a8a;
+  --card-foreground: #2a1b10;
   --popover: #ffffff;
-  --popover-foreground: #1e3a8a;
-  --primary: #1e40af; /* Royal blue */
+  --popover-foreground: #2a1b10;
+  --primary: #146c43; /* Deep river green */
   --primary-foreground: #ffffff;
-  --secondary: #dbeafe;
-  --secondary-foreground: #1e40af;
-  --muted: #e9eff5;
-  --muted-foreground: #475569;
-  --accent: #16a34a; /* Service green */
-  --accent-foreground: #ffffff;
-  --destructive: #dc2626;
-  --border: #bfdbfe;
-  --input: #bfdbfe;
-  --ring: #1e40af;
+  --secondary: #f0e7d3; /* Deeper sand */
+  --secondary-foreground: #2a1b10;
+  --muted: #f3ebda; /* Warm wash */
+  --muted-foreground: #57503f; /* Warm gray-brown */
+  --accent: #d99a00; /* Gold, action highlight; dark text only, never white */
+  --accent-foreground: #26180c;
+  --destructive: #c0392b; /* Terracotta red */
+  --border: #e5dcc6;
+  --input: #e3d9c2;
+  --ring: #146c43;
   --radius: 0.5rem;
 
-  /* Steel tones (reference language): washes and hairlines only, never text */
-  --steel: #6b8cae;
-  --steel-soft: rgba(107, 140, 174, 0.1);
-  --steel-fog: rgba(107, 140, 174, 0.16);
-  --steel-line: rgba(107, 140, 174, 0.32);
-  --fixed: #2e7d53; /* Fixed: success green, 5.0:1 on white */
+  /* Clay tones (reference language): washes and hairlines only, never text */
+  --clay: #a89478;
+  --clay-soft: rgba(168, 148, 120, 0.12);
+  --clay-fog: rgba(168, 148, 120, 0.18);
+  --clay-line: rgba(168, 148, 120, 0.38);
+
+  /* Named working colors */
+  --gold-deep: #9c6a00; /* icons/labels on white, 4.7:1 */
+  --terracotta: #a64b26; /* text-grade terracotta, 5.2:1 on sand */
+  --band: #123b29; /* deep green band background */
+  --band-cream: #f9f4e8;
+  --band-muted: #cbbfa8;
+  --fixed: #146c43; /* Fixed: success green = the one green, 6.5:1 with white */
 }
 
 @theme inline {
@@ -49,10 +59,15 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-steel: var(--steel);
-  --color-steel-line: var(--steel-line);
-  --color-steel-soft: var(--steel-soft);
-  --color-steel-fog: var(--steel-fog);
+  --color-clay: var(--clay);
+  --color-clay-line: var(--clay-line);
+  --color-clay-soft: var(--clay-soft);
+  --color-clay-fog: var(--clay-fog);
+  --color-gold-deep: var(--gold-deep);
+  --color-terracotta: var(--terracotta);
+  --color-band: var(--band);
+  --color-band-cream: var(--band-cream);
+  --color-band-muted: var(--band-muted);
   --color-fixed: var(--fixed);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -80,20 +95,20 @@
     line-height: 1.65;
   }
   ::selection {
-    background: var(--steel-fog);
+    background: var(--clay-fog);
   }
 }
 
 @layer utilities {
-  /* Hairline in the steel tone for dividers that carry structure */
+  /* Hairline in the clay tone for dividers that carry structure */
   .hairline-t {
-    border-top: 1px solid var(--steel-line);
+    border-top: 1px solid var(--clay-line);
   }
   .hairline-b {
-    border-bottom: 1px solid var(--steel-line);
+    border-bottom: 1px solid var(--clay-line);
   }
   .tile-wash {
-    background: var(--steel-soft);
+    background: var(--clay-soft);
   }
   .tabular {
     font-variant-numeric: tabular-nums;
@@ -101,15 +116,15 @@
 }
 
 /* PhoneCase device mockup: looping camera pill + gentle float.
-   Color drifts between primary blue and service green (design tokens). */
+   Color drifts between espresso ink and deep river green (design tokens). */
 @keyframes phone-call-transition {
   0% {
     width: 26%;
-    background-color: #1e3a8a;
+    background-color: #2a1b10;
   }
   100% {
     width: 64%;
-    background-color: #14532d;
+    background-color: #146c43;
   }
 }
 .phone-pill {

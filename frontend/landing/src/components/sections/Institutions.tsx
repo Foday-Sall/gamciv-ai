@@ -11,7 +11,7 @@ const institutions = [
     name: "NAWEC",
     full: "National Water and Electricity Company",
     logo: "/logos/nawec.png",
-    body: "Water that never comes, sewerage that overflows, blackouts and unsafe connections — the faults that disrupt whole neighbourhoods.",
+    body: "Water that never comes, sewerage that overflows, blackouts and unsafe connections: the faults that disrupt whole neighbourhoods.",
   },
   {
     name: "NRA",
@@ -36,7 +36,7 @@ const institutions = [
 /* Institutions */
 export default function Institutions() {
   return (
-    <section id="institutions" className="hairline-b bg-card" aria-labelledby="inst-heading">
+    <section id="institutions" className="hairline-b scroll-mt-24 bg-card" aria-labelledby="inst-heading">
       <div className="mx-auto max-w-6xl px-5 py-20 md:px-8">
         <h2 id="inst-heading" className="max-w-xl text-balance text-3xl font-semibold tracking-tight font-display md:text-4xl">
           Reports go to the office that can act
@@ -55,7 +55,7 @@ export default function Institutions() {
                   width={40}
                   height={40}
                   loading="lazy"
-                  className="h-10 w-10 shrink-0 border border-steel-line bg-white object-contain p-0.5"
+                  className="h-10 w-10 shrink-0 border border-clay-line bg-white object-contain p-0.5"
                 />
                 <div className="min-w-0">
                   <p className="font-semibold tracking-tight">

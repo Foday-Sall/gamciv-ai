@@ -7,7 +7,7 @@ import { EASE, fadeUp } from "@/components/sections/shared"
 
 /* Hero: split layout, chat is the centerpiece. Eyebrow is national (flag +
    republic line), the lead is a plain-language definition with the key phrase
-   accented in service green (NFIP definition pattern). */
+   highlighted in gold (marker-pen emphasis, warm rather than institutional). */
 export default function Hero({ reduce }: { reduce: boolean | null }) {
   return (
     <section className="hairline-b">
@@ -25,8 +25,8 @@ export default function Hero({ reduce }: { reduce: boolean | null }) {
             <AnimatedHeadline />
           </div>
           <motion.p variants={fadeUp()} className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            You see the problem every day — the flooded drain, the dark street, the pipe that never gets fixed. You should not need to know which office owns it.{" "}
-            <span className="bg-accent/10 font-semibold text-foreground box-decoration-clone px-1">
+            You see the problem every day: the flooded drain, the dark street, the pipe that never gets fixed. You should not need to know which office owns it.{" "}
+            <span className="bg-accent/25 font-semibold text-foreground box-decoration-clone px-1">
               Send one WhatsApp message, a photo and a sentence, and the case is opened, routed and pushed until it is done.
             </span>
           </motion.p>

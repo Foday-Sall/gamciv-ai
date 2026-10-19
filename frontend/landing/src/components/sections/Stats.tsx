@@ -34,12 +34,13 @@ const stats = [
   { value: 18, label: "Institutions receiving reports", note: "5 national, 13 municipal" },
 ]
 
-/* Stats: a full-bleed navy transparency band - the Caserta/WorlGov ledger
-   pattern. Plain tabular figures separated by hairline rules, white on navy.
+/* Stats: a full-bleed deep-green transparency band - the ledger pattern,
+   now in the national green instead of navy. Plain tabular figures separated
+   by hairline rules, cream on deep green, numbers ticked in gold.
    Same numbers, presented as a public ledger instead of cards. */
 export default function Stats() {
   return (
-    <section id="stats" aria-labelledby="stats-heading" className="bg-primary text-white">
+    <section id="stats" aria-labelledby="stats-heading" className="bg-[#123B29] text-[#F9F4E8]">
       <div className="mx-auto max-w-6xl px-5 py-16 md:px-8 md:py-20">
         <Reveal>
           <h2 id="stats-heading" className="max-w-xl text-balance text-2xl font-semibold tracking-tight font-display md:text-3xl">
@@ -49,18 +50,18 @@ export default function Stats() {
         <Reveal delay={0.05}>
           <div className="mt-10 grid grid-cols-2 gap-x-8 gap-y-10 md:grid-cols-4 md:gap-x-10">
             {stats.map((s, i) => (
-              <div key={s.label} className={"border-blue-300/30 " + (i > 0 ? "border-l pl-5 md:pl-6" : "")}>
-                <p className="font-display text-5xl font-semibold tracking-tight tabular">
+              <div key={s.label} className={i > 0 ? "border-l border-[#CBBFA8]/25 pl-5 md:pl-6" : ""}>
+                <p className="font-display text-5xl font-semibold tracking-tight text-[#D99A00] tabular">
                   <AnimatedCounter value={s.value} />
                 </p>
-                <p className="mt-3 text-sm font-medium text-blue-100">{s.label}</p>
-                <p className="mt-1 text-xs text-blue-200">{s.note}</p>
+                <p className="mt-3 text-sm font-medium text-[#F9F4E8]">{s.label}</p>
+                <p className="mt-1 text-xs text-[#CBBFA8]">{s.note}</p>
               </div>
             ))}
           </div>
         </Reveal>
         <Reveal delay={0.1}>
-          <p className="mt-9 flex items-center gap-1.5 text-xs text-blue-200">
+          <p className="mt-9 flex items-center gap-1.5 text-xs text-[#CBBFA8]">
             <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             Figures are pilot placeholders pending the live statistics feed.
           </p>
