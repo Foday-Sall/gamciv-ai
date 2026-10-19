@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Lint backend (deno lint)
+        working-directory: backend
+        run: deno lint
+
+      - name: Test backend (deno test)
+        working-directory: backend
+        run: deno test --allow-all
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build landing (vite)
+        working-directory: frontend/landing
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build admin dashboard (vite)
+        working-directory: frontend/dashboard/admin
+        run: |
+          npm ci
+          npm run build
