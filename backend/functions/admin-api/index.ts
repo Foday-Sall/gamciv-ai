@@ -195,7 +195,7 @@ export async function handleAdminRequest(
 const JWT_SECRET = Deno.env.get("JWT_SECRET");
 const SUPABASE_JWKS = parseJwks(Deno.env.get("SUPABASE_JWKS"));
 const POSTGREST_URL = Deno.env.get("SUPABASE_URL") ?? Deno.env.get("NEXT_PUBLIC_SUPABASE_URL") ?? "";
-const POSTGREST_KEY = Deno.env.get("SUPABASE_ANON_KEY") ??
+const _POSTGREST_KEY = Deno.env.get("SUPABASE_ANON_KEY") ??
   Deno.env.get("NEXT_PUBLIC_SUPABASE_ANON_KEY") ?? "";
 
 // NOTE: bare array parsing only; jose handles key validity.
