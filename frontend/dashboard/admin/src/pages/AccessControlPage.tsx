@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Shield, Save, Layers, Clock, Gauge } from "lucide-react"
+import { Shield } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Switch } from "@/components/ui/switch"
-import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -16,7 +12,6 @@ import {
 } from "@/components/ui/select"
 import { PageHeader } from "@/components/PageHeader"
 import {
-  ALL_CATEGORIES,
   getAccessLimits,
   getInstitutions,
   setAccessLevel,
@@ -27,11 +22,9 @@ import {
   type Institution,
 } from "@/lib/adminApi"
 import { toast } from "@/components/ui/toast"
-
-function LevelBadge({ level }: { level: AccessLimits["accessLevel"] }) {
-  const variant = level === "full" ? "success" : level === "restricted" ? "warning" : "info"
-  return <Badge variant={variant}>{level}</Badge>
-}
+import InstitutionList from "@/pages/access-control/InstitutionList"
+import LimitInputs from "@/pages/access-control/LimitInputs"
+import CategoryToggles from "@/pages/access-control/CategoryToggles"
 
 export default function AccessControlPage() {
   const [institutions, setInstitutions] = useState<Institution[] | null>(null)
@@ -146,27 +139,7 @@ export default function AccessControlPage() {
             <p className="px-3 pb-2 pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Institutions
             </p>
-            <div className="space-y-1">
-              {(institutions ?? []).map((institution) => (
-                <button
-                  key={institution.id}
-                  type="button"
-                  onClick={() => setSelectedId(institution.id)}
-                  className={
-                    "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm transition-colors " +
-                    (selectedId === institution.id
-                      ? "bg-primary/12 text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground")
-                  }
-                >
-                  <span className="truncate">{institution.name}</span>
-                  <LevelBadge level={institution.accessLevel} />
-                </button>
-              ))}
-              {!institutions
-                ? [0, 1, 2, 3].map((key) => <Skeleton key={key} className="h-10 w-full" />)
-                : null}
-            </div>
+            <InstitutionList institutions={institutions} selectedId={selectedId} onSelect={setSelectedId} />
           </CardContent>
         </Card>
 
@@ -211,92 +184,16 @@ export default function AccessControlPage() {
                 </CardContent>
               </Card>
 
-              <div className="grid gap-6 md:grid-cols-2">
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" style={{ strokeWidth: 1.75 }} aria-hidden="true" />
-                      <p className="text-sm font-medium">SLA hours</p>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Hours allowed before a complaint escalates for this institution.
-                    </p>
-                    <div className="mt-4 flex items-center gap-3">
-                      <Input
-                        type="number"
-                        min={1}
-                        max={240}
-                        value={limits.slaHours}
-                        onChange={(event) => {
-                          const value = Number(event.target.value)
-                          if (Number.isFinite(value) && value > 0) void changeSla(value)
-                        }}
-                        className="w-28"
-                        aria-label="SLA hours"
-                      />
-                      <span className="text-sm text-muted-foreground">hours per complaint</span>
-                    </div>
-                  </CardContent>
-                </Card>
+              <LimitInputs
+                limits={{ slaHours: limits.slaHours, maxPerDay: limits.maxPerDay }}
+                onChangeSla={(hours) => void changeSla(hours)}
+                onChangeRate={(maxPerDay) => void changeRate(maxPerDay)}
+              />
 
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-2">
-                      <Gauge className="h-4 w-4 text-muted-foreground" style={{ strokeWidth: 1.75 }} aria-hidden="true" />
-                      <p className="text-sm font-medium">Max complaints per day</p>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Daily intake cap applied to this institution's account.
-                    </p>
-                    <div className="mt-4 flex items-center gap-3">
-                      <Input
-                        type="number"
-                        min={0}
-                        max={500}
-                        value={limits.maxPerDay}
-                        onChange={(event) => {
-                          const value = Number(event.target.value)
-                          if (Number.isFinite(value) && value >= 0) void changeRate(value)
-                        }}
-                        className="w-28"
-                        aria-label="Max complaints per day"
-                      />
-                      <span className="text-sm text-muted-foreground">complaints / day</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-2">
-                    <Layers className="h-4 w-4 text-muted-foreground" style={{ strokeWidth: 1.75 }} aria-hidden="true" />
-                    <p className="text-sm font-medium">Allowed categories</p>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Only complaints in these categories are routed to this institution.
-                  </p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {ALL_CATEGORIES.map((category) => (
-                      <div
-                        key={category}
-                        className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5"
-                      >
-                        <Label className="text-sm font-normal">{category}</Label>
-                        <Switch
-                          checked={limits.allowedCategories.includes(category)}
-                          onCheckedChange={(checked) => toggleCategory(category, checked)}
-                          aria-label={`Toggle category ${category}`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-                    <Save className="h-3.5 w-3.5" style={{ strokeWidth: 1.75 }} aria-hidden="true" />
-                    Changes save immediately and appear in the audit log.
-                  </p>
-                </CardContent>
-              </Card>
+              <CategoryToggles
+                selectedCategories={limits.allowedCategories}
+                onToggle={toggleCategory}
+              />
             </motion.div>
           ) : (
             <motion.div key="skeleton" exit={{ opacity: 0 }}>
