@@ -1,13 +1,4 @@
--- ============================================================================
--- GamCiv AI — 0008_ops.sql
--- Public tracking function, storage bucket + storage RLS, realtime, pg_cron
--- ============================================================================
-
--- ---------------------------------------------------------------------------
--- PUBLIC TRACKING (GET /reports/:tracking_no): citizen-visible projection.
--- Sensitive cases return no rows (caller shows 404). No auth required;
--- lookup by full tracking code only.
--- ---------------------------------------------------------------------------
+-- 0008_ops.sql — public tracking fn, storage bucket + RLS, realtime, pg_cron, track_complaint
 create or replace function public.fn_public_tracking(
   p_tracking_no text
 ) returns table (
@@ -45,16 +36,11 @@ $$;
 
 grant execute on function public.fn_public_tracking(text) to anon, authenticated;
 
--- STORAGE BUCKET (idempotent)
 insert into storage.buckets (id, name, public)
 values ('complaint-photos', 'complaint-photos', false)
 on conflict (id) do nothing;
 
--- ---------------------------------------------------------------------------
--- STORAGE RLS: complaint photos. Folder convention: photos live under
--- "{complaint_id}/..." in the bucket. Owner, owning-institution officers,
--- admin, and service can read; owner/staff/service can write.
--- ---------------------------------------------------------------------------
+-- photos live under {complaint_id}/... in the bucket; owner, owning-institution officers, admin, service only
 create policy "photos_select" on storage.objects
   for select to authenticated
   using (
@@ -83,7 +69,6 @@ create policy "photos_insert" on storage.objects
 create policy "photos_service_all" on storage.objects
   for all to service_role using (true) with check (true);
 
--- REALTIME: live dashboards need complaints + updates (guarded, idempotent)
 do $$
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
@@ -98,11 +83,7 @@ begin
   end if;
 end $$;
 
--- ---------------------------------------------------------------------------
--- PG_CRON: escalation sweep every 15 min, auto-close sweep daily.
--- Guarded: only if pg_cron extension is available. n8n can also call the
--- sweep functions directly as a fallback.
--- ---------------------------------------------------------------------------
+-- pg_cron: escalation sweep every 15 min, auto-close daily; guarded — n8n fallback calls the sweeps directly
 do $$
 begin
   if exists (select 1 from pg_available_extensions where name = 'pg_cron') then
@@ -136,24 +117,7 @@ begin
   end if;
 end $cron$;
 
-
--- ---------------------------------------------------------------------------
--- PUBLIC TRACKING: anonymous timeline lookup by tracking code.
--- Sensitive cases return only status + timestamps (no description/location).
--- Used by the public tracking page (GET /reports/:tracking_no).
--- ----------------------------------------------------------------------------
--- PUBLIC TRACKING: anonymous timeline lookup by tracking code.
--- SECURITY FIX (2026-10-19, applied LIVE): sensitive cases (is_sensitive=true)
--- now return ONLY tracking_no + status -- institution, department, urgency,
--- expected_response_at, resolved_at and closed_at are nulled and the timeline
--- is a single generic message. Previously institution/urgency/response times
--- and the real timeline leaked for sensitive complaints. Non-sensitive
--- complaints keep the full projection, identical to the original logic.
--- NOTE: on the live DB, anon/authenticated EXECUTE on this function was
--- already absent before this fix (earlier hardening) and was left as found;
--- the grant below is kept for fresh deployments (sibling functions grant it).
--- Used by the public tracking page (GET /reports/:tracking_no).
--- ----------------------------------------------------------------------------
+-- SECURITY: sensitive complaints return only tracking_no + status (no institution, urgency, response times, or real timeline)
 create or replace function public.track_complaint(
   p_tracking_no text
 ) returns jsonb
@@ -170,7 +134,6 @@ begin
     return null;
   end if;
 
-  -- SENSITIVE: minimal projection only (tracking_no + status)
   if c.is_sensitive then
     return jsonb_build_object(
       'tracking_no', c.tracking_no,
@@ -191,7 +154,6 @@ begin
     );
   end if;
 
-  -- NON-SENSITIVE: full projection (unchanged behavior)
   return jsonb_build_object(
     'tracking_no', c.tracking_no,
     'status', c.status,

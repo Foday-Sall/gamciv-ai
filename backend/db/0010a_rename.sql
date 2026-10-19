@@ -1,6 +1,4 @@
--- 0010_bridge.sql — connect edge functions to DB layer
--- Part 1: rename DB-agent submit_complaint to submit_complaint_core
-
+-- 0010a_rename.sql — bridge part 1: rename DB-agent submit_complaint to submit_complaint_core (must run before 0010b_wrapper.sql)
 ALTER FUNCTION public.submit_complaint(
   p_title text, p_description text, p_category_id uuid, p_ai_confidence numeric,
   p_urgency urgency_level, p_lat numeric, p_lng numeric, p_region text,

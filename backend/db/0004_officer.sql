@@ -1,11 +1,4 @@
--- ============================================================================
--- GamCiv AI — 0004_officer.sql
--- Authorization helpers + officer/admin RPCs
--- ============================================================================
-
--- ---------------------------------------------------------------------------
--- AUTHZ HELPERS
--- ---------------------------------------------------------------------------
+-- 0004_officer.sql — authorization helpers + officer/admin RPCs
 create or replace function public.fn_is_admin()
 returns boolean
 language sql stable
@@ -31,7 +24,6 @@ as $$
   limit 1;
 $$;
 
--- is the current user an officer/admin of the institution that owns c?
 create or replace function public.fn_is_officer_of(
   p_complaint_id uuid
 ) returns boolean
@@ -47,7 +39,6 @@ begin
     return false;
   end if;
 
-  -- admins pass everything
   if public.fn_is_admin() then
     return true;
   end if;
@@ -58,7 +49,6 @@ begin
     return false;
   end if;
 
-  -- via officers table (institution match)
   if exists (
     select 1 from public.officers o
     where o.user_id = auth.uid() and o.institution_id = v_inst
@@ -66,7 +56,6 @@ begin
     return true;
   end if;
 
-  -- via profiles (role officer + organization)
   select role::text into v_role
   from public.profiles
   where user_id = auth.uid();
@@ -80,9 +69,6 @@ begin
   return false;
 end $$;
 
--- ---------------------------------------------------------------------------
--- OFFICER RPC: accept a case (submitted/received -> assigned)
--- ---------------------------------------------------------------------------
 create or replace function public.fn_officer_accept(
   p_complaint_id uuid
 ) returns boolean
@@ -127,9 +113,6 @@ begin
   return true;
 end $$;
 
--- ---------------------------------------------------------------------------
--- OFFICER RPC: reject a case (reason REQUIRED)
--- ---------------------------------------------------------------------------
 create or replace function public.fn_officer_reject(
   p_complaint_id uuid,
   p_reason text
@@ -173,9 +156,6 @@ begin
   return true;
 end $$;
 
--- ---------------------------------------------------------------------------
--- OFFICER RPC: request info from citizen (status -> waiting_info)
--- ---------------------------------------------------------------------------
 create or replace function public.fn_officer_request_info(
   p_complaint_id uuid,
   p_message text
@@ -214,9 +194,6 @@ begin
   return true;
 end $$;
 
--- ---------------------------------------------------------------------------
--- OFFICER RPC: progress status (assigned -> in_progress -> citizen_confirmation)
--- ---------------------------------------------------------------------------
 create or replace function public.fn_officer_set_status(
   p_complaint_id uuid,
   p_status text,
@@ -235,12 +212,11 @@ begin
 
   select * into c from public.complaints where id = p_complaint_id;
 
-  -- legal transitions
   if p_status = 'in_progress' and c.status in ('assigned','waiting_info') then
     v_allowed := true;
   elsif p_status = 'citizen_confirmation' and c.status in ('assigned','in_progress','waiting_info') then
     if p_citizen_message is null or length(btrim(p_citizen_message)) < 5 then
-      return false;  -- resolution requires an explanation to the citizen
+      return false;
     end if;
     v_allowed := true;
   end if;
@@ -279,9 +255,6 @@ begin
   return true;
 end $$;
 
--- ---------------------------------------------------------------------------
--- OFFICER RPC: internal note (never citizen-visible)
--- ---------------------------------------------------------------------------
 create or replace function public.fn_officer_note(
   p_complaint_id uuid,
   p_note text
@@ -306,9 +279,6 @@ begin
   return true;
 end $$;
 
--- ---------------------------------------------------------------------------
--- OFFICER RPC: attach proof (photo url; visible to citizen)
--- ---------------------------------------------------------------------------
 create or replace function public.fn_officer_attach_proof(
   p_complaint_id uuid,
   p_photo_url text

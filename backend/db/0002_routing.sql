@@ -1,12 +1,4 @@
--- ============================================================================
--- GamCiv AI — 0002_routing.sql
--- SLA deadlines, emergency keyword check, location resolution, routing engine
--- ============================================================================
-
--- ---------------------------------------------------------------------------
--- fn_calculate_deadline: category base hours × urgency multiplier,
--- clamped to [4h, 168h].
--- ---------------------------------------------------------------------------
+-- 0002_routing.sql — SLA deadlines, emergency keyword check, location resolution, routing engine
 create or replace function public.fn_calculate_deadline(
   p_category_id uuid,
   p_urgency public.urgency_level
@@ -32,10 +24,6 @@ begin
   return now() + make_interval(hours => v_hours);
 end $$;
 
--- ---------------------------------------------------------------------------
--- fn_check_emergency_keywords: fire terms → emergency_fire,
--- violence terms → emergency_police, else null.
--- ---------------------------------------------------------------------------
 create or replace function public.fn_check_emergency_keywords(
   p_title text,
   p_description text
@@ -55,12 +43,7 @@ begin
   return null;
 end $$;
 
--- ---------------------------------------------------------------------------
--- fn_resolve_location_institution: municipal council pick.
--- 1) explicit council_area matched against contact->'aliases'
--- 2) else bbox lookup with lat/lng against contact->'bbox' = [minLat, minLng, maxLat, maxLng]
--- Returns (institution_id, method); ('none', method) when nothing matched.
--- ---------------------------------------------------------------------------
+-- resolution: council_area alias match, else lat/lng inside contact->'bbox' = [minLat, minLng, maxLat, maxLng]
 create or replace function public.fn_resolve_location_institution(
   p_council_area text,
   p_lat numeric,
@@ -109,11 +92,6 @@ begin
   end if;
 end $$;
 
--- ---------------------------------------------------------------------------
--- fn_route_complaint: the routing engine (BLUEPRINT §7 rules 1-7).
--- Reads the complaint, applies rules in order, writes routing fields.
--- Returns jsonb {institution_id, department_id, status, decision}.
--- ---------------------------------------------------------------------------
 create or replace function public.fn_route_complaint(
   p_complaint_id uuid
 ) returns jsonb
@@ -140,9 +118,6 @@ begin
     raise exception 'CENTRAL institution missing';
   end if;
 
-  -- RULE 1: emergency keywords override category and urgency.
-  -- is_sensitive is applied in the FINAL routing update together with
-  -- institution_id so the chk_sensitive_routed constraint always holds.
   v_emerg := public.fn_check_emergency_keywords(c.title, c.description);
   if v_emerg is not null then
     update public.complaints
@@ -162,18 +137,15 @@ begin
   v_status := 'received';
   v_reason := null;
 
-  -- RULE 3: confidence gate
   if c.ai_confidence is not null and c.ai_confidence < 0.70 then
     v_inst := v_central;
     v_status := 'submitted';
     v_reason := 'low_confidence_central_desk';
   else
-    -- RULE 4: category default
     v_inst := v_cat.default_institution_id;
     v_dept := v_cat.default_department_id;
     v_reason := 'category_default';
 
-    -- RULE 5: location refinement for municipal categories
     if v_inst is not null and (
       select i.type from public.institutions i where i.id = v_inst
     ) = 'municipal' then
@@ -186,9 +158,6 @@ begin
     end if;
   end if;
 
-  -- RULE 6: sensitive categories via Central Desk — EXCEPT true emergencies
-  -- (fire/police emergency categories route straight to FIRE/POLICE;
-  --  emergencies must not wait for human triage)
   if v_cat.is_sensitive and not coalesce(v_cat.is_emergency, false) then
     v_inst := v_central;
     v_dept := null;
@@ -196,15 +165,13 @@ begin
     v_reason := 'sensitive_central_desk';
   end if;
 
-  -- safety net: never unrouted
   if v_inst is null then
     v_inst := v_central;
     v_status := 'submitted';
     v_reason := 'unrouted_fallback_central';
   end if;
 
-  -- RULE 7: write routing + deadline + sensitivity flag (single update so
-  -- the chk_sensitive_routed constraint is never violated mid-flight)
+-- routing + is_sensitive written in one update so chk_sensitive_routed never violates mid-flight
   update public.complaints
      set institution_id = v_inst,
          department_id = v_dept,

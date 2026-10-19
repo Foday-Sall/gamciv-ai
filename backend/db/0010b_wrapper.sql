@@ -1,12 +1,5 @@
--- 0010b_wrapper.sql — API-contract submit_complaint wrapper
--- Maps the edge function's contract params onto submit_complaint_core.
--- Matches docs/sql-contract.md exactly.
---
--- 2026-10: input size limits (defence-in-depth with the edge functions'
--- _shared/limits.ts): oversized values are rejected here at the DB boundary
--- so no path (function bug, direct PostgREST call, dashboard SQL editor) can
--- write unbounded text into the complaints tables.
-
+-- 0010b_wrapper.sql — API-contract submit_complaint wrapper over submit_complaint_core (matches docs/sql-contract.md)
+-- input size limits mirror functions/_shared/limits.ts: oversized values are rejected at the DB boundary
 CREATE OR REPLACE FUNCTION public.submit_complaint(
   p_title text,
   p_description text,
@@ -43,9 +36,6 @@ DECLARE
   v_final_urgency text;
   v_conf numeric;
 BEGIN
-  -- ------------------------------------------------------------------
-  -- Input size limits (reject, don't truncate: callers should know).
-  -- ------------------------------------------------------------------
   IF p_title IS NOT NULL AND char_length(p_title) > 200 THEN
     RAISE EXCEPTION 'p_title exceeds 200 characters';
   END IF;
@@ -128,12 +118,10 @@ BEGIN
     p_is_anonymous  => p_is_anonymous
   );
 
-  -- external_id bookkeeping for dedupe (idempotency key from the webhook)
   UPDATE public.complaints
   SET external_id = p_external_id
   WHERE id = v_result.id AND p_external_id IS NOT NULL;
 
-  -- enrich result with institution info
   SELECT i.code, i.name, d.name, COALESCE(cat.is_sensitive, false)
   INTO v_inst_code, v_inst_name, v_dept_name, v_sensitive
   FROM public.complaints c

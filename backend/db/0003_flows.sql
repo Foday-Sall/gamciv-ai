@@ -1,14 +1,4 @@
--- ============================================================================
--- GamCiv AI — 0003_flows.sql
--- Grouping, notification templates, citizen submission + confirm/reopen RPCs
--- ============================================================================
-
--- ---------------------------------------------------------------------------
--- GROUPING (BLUEPRINT §7 rule 8, API-BLUEPRINT grouping rules):
--- same category + haversine < 500 m + open group + activity within 72 h →
--- attach, else create a new group. Groups close when their last case closes;
--- reopening a case reopens its group.
--- ---------------------------------------------------------------------------
+-- 0003_flows.sql — grouping, notification queue, citizen submit/confirm/reopen RPCs
 create or replace function public.fn_group_complaint(
   p_complaint_id uuid
 ) returns uuid
@@ -23,7 +13,6 @@ begin
     raise exception 'complaint % not found', p_complaint_id;
   end if;
 
-  -- no geo → no grouping
   if c.lat is null or c.lng is null then
     return null;
   end if;
@@ -59,7 +48,6 @@ begin
   return v_group;
 end $$;
 
--- group lifecycle triggers
 create or replace function public.fn_group_lifecycle()
 returns trigger
 language plpgsql
@@ -77,7 +65,6 @@ begin
   end if;
 
   if TG_OP = 'UPDATE' and new.status in ('closed','rejected') then
-    -- close the group when its last open case closes
     if not exists (
       select 1 from public.complaints
       where group_id = v_group
@@ -87,7 +74,6 @@ begin
       update public.complaint_groups set closed_at = now() where id = v_group and closed_at is null;
     end if;
   elsif TG_OP = 'UPDATE' and new.status not in ('closed','rejected') then
-    -- a reopened/active case keeps its group open
     update public.complaint_groups set closed_at = null
     where id = v_group and closed_at is not null;
   end if;
@@ -99,10 +85,7 @@ create trigger trg_group_lifecycle
   after insert or update or delete on public.complaints
   for each row execute function public.fn_group_lifecycle();
 
--- ---------------------------------------------------------------------------
--- NOTIFICATIONS: queue a row; n8n picks up pending rows and sends via
--- GOWA (whatsapp) or Termii (sms), then marks sent/failed.
--- ---------------------------------------------------------------------------
+-- notifications is a queue: n8n sends pending rows via GOWA (whatsapp) / Termii (sms), then marks sent/failed
 create or replace function public.fn_notify(
   p_complaint_id uuid,
   p_channel public.notif_channel,
@@ -123,7 +106,6 @@ begin
   return v_id;
 end $$;
 
--- notify the complaint's citizen (skips anonymous / missing phone)
 create or replace function public.fn_notify_citizen(
   p_complaint_id uuid,
   p_message text,
@@ -144,7 +126,6 @@ begin
   return v_id;
 end $$;
 
--- notify every complainant in a group (BLUEPRINT: group members get updates)
 create or replace function public.fn_notify_group(
   p_group_id uuid,
   p_message text
@@ -168,12 +149,7 @@ begin
   return v_count;
 end $$;
 
--- ---------------------------------------------------------------------------
--- SUBMIT COMPLAINT — the intake RPC (API blueprint POST /reports).
--- Runs in one transaction: insert → routing → grouping → update row → notify.
--- p_ai_confidence: set by n8n from Workers AI; null = rules only.
--- Returns the full complaint row (PostgREST returns it as JSON).
--- ---------------------------------------------------------------------------
+-- intake RPC (POST /reports): insert → routing → grouping → audit row → notify in one transaction
 create or replace function public.submit_complaint(
   p_title         text,
   p_description   text,
@@ -199,7 +175,6 @@ declare
   v_route jsonb;
   v_gid  uuid;
 begin
-  -- basic input validation
   if p_title is null or length(btrim(p_title)) < 3 then
     raise exception 'title_required_min_3_chars';
   end if;
@@ -213,7 +188,6 @@ begin
     raise exception 'unknown_category';
   end if;
 
-  -- anonymous reports must carry no identity (DB constraint enforces too)
   if p_is_anonymous then
     p_citizen_name := null;
     p_citizen_phone := null;
@@ -229,14 +203,11 @@ begin
     p_channel, p_citizen_name, p_citizen_phone, p_is_anonymous
   ) returning id into v_id;
 
-  -- ROUTING ENGINE
   v_route := public.fn_route_complaint(v_id);
   select * into v_row from public.complaints where id = v_id;
 
-  -- GROUPING
   v_gid := public.fn_group_complaint(v_id);
 
-  -- AUDIT ROW (the timeline)
   insert into public.complaint_updates (
     complaint_id, actor_label, update_type, status_from, status_to,
     explanation, citizen_message, is_citizen_visible
@@ -249,7 +220,6 @@ begin
     true
   );
 
-  -- INTAKE NOTIFICATION (BLUEPRINT §10 template)
   perform public.fn_notify_citizen(
     v_id,
     'Received, reference ' || v_row.tracking_no || '. ' ||
@@ -260,12 +230,7 @@ begin
   return v_row;
 end $$;
 
--- ---------------------------------------------------------------------------
--- CONFIRM COMPLAINT — citizen confirms resolution (POST /reports/:tn/confirm).
--- Allowed: matching citizen_phone (tokenless, as sent in SMS/WhatsApp),
--- authenticated owner, officer of owning institution, or admin.
--- Only from citizen_confirmation / resolved.
--- ---------------------------------------------------------------------------
+-- citizen confirms resolution; allowed: phone match (tokenless), authenticated owner, owning-institution officer, admin
 create or replace function public.confirm_complaint(
   p_tracking_no text,
   p_phone text default null
@@ -286,7 +251,6 @@ begin
     return false;
   end if;
 
-  -- phone match (case/space tolerant)
   if p_phone is not null and not c.is_anonymous
      and c.citizen_phone is not null
      and regexp_replace(c.citizen_phone, '[^0-9+]', '', 'g')
@@ -294,17 +258,14 @@ begin
     v_allowed := true;
   end if;
 
-  -- authenticated owner
   if not v_allowed and auth.uid() is not null and c.citizen_id = auth.uid() then
     v_allowed := true;
   end if;
 
-  -- admin
   if not v_allowed and public.fn_is_admin() then
     v_allowed := true;
   end if;
 
-  -- officer of the owning institution
   if not v_allowed and public.fn_is_officer_of(c.id) then
     v_allowed := true;
   end if;
@@ -328,11 +289,7 @@ begin
   return true;
 end $$;
 
--- ---------------------------------------------------------------------------
--- REOPEN COMPLAINT — citizen rejects the fix (POST /reports/:tn/reopen).
--- Same authorization as confirm; from citizen_confirmation/resolved/closed.
--- Increments reopened_count, re-enters officer queue, reopens the group.
--- ---------------------------------------------------------------------------
+-- citizen rejects the fix; same authorization as confirm; re-enters officer queue and reopens the group
 create or replace function public.reopen_complaint(
   p_tracking_no text,
   p_reason text,
@@ -383,7 +340,6 @@ begin
          closed_at = null,
          resolved_at = null,
          reopened_count = reopened_count + 1,
-         -- fresh SLA window for the rework
          expected_response_at = public.fn_calculate_deadline(c.category_id, c.urgency)
    where id = c.id;
 

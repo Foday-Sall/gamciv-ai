@@ -1,21 +1,5 @@
--- ============================================================================
--- GamCiv AI — 0009_seed.sql
--- Institutions, departments, categories, officers, demo complaints.
--- Demo complaints are seeded through the REAL routing + grouping functions
--- so the seeded data matches what production intake produces.
--- ============================================================================
-
--- ############################################################################
--- #  DEMO / DEV ONLY -- NEVER RUN AGAINST A PRODUCTION DATABASE              #
--- #                                                                          #
--- #  This seed creates demo accounts whose password is public in the repo    #
--- #  (originally 'DemoPass123!'). On 2026-10-19 the copies of these          #
--- #  accounts on the LIVE database were hardened: passwords were rotated to  #
--- #  random secrets and every account was banned (auth.users.banned_until    #
--- #  = 2099), so they can no longer authenticate.                            #
--- #  Safe to run only when standing up a throwaway demo environment.         #
--- ############################################################################
--- ---------- INSTITUTIONS ----------
+-- 0009_seed.sql — institutions, departments, categories, officers, demo auth users + complaints (seeded through the real intake RPC)
+-- DEMO/DEV ONLY: never run against a production database — demo account passwords are public in this repo (live copies rotated and banned 2026-10-19).
 insert into public.institutions (code, name, type, is_dashboard, public_visible, contact) values
 
   ('KMC', 'Kanifing Municipal Council', 'municipal', True, True, '{"phone": "+2204390001", "email": "info@kmc.gm", "aliases": ["kanifing", "kmc", "serekunda"], "bbox": [13.48, -16.76, 13.56, -16.62]}'::jsonb),
@@ -30,7 +14,6 @@ insert into public.institutions (code, name, type, is_dashboard, public_visible,
   ('CENTRAL', 'GamCiv Central Desk', 'central', True, False, '{"phone": "+2201000000", "email": "central@gamciv.gm"}'::jsonb)
 ;
 
--- ---------- DEPARTMENTS ----------
 insert into public.departments (institution_id, name)
 select i.id, d.dept_name
 from (values
@@ -53,7 +36,6 @@ from (values
 ) as d(inst_code, dept_name)
 join public.institutions i on i.code = d.inst_code;
 
--- ---------- CATEGORIES ----------
 insert into public.categories
   (name, slug, keywords, default_institution_id, default_department_id, is_sensitive, is_emergency, deadline_hours)
 select
@@ -86,7 +68,6 @@ from (values
 left join public.institutions di on di.code = v.inst_code
 left join public.departments dd on dd.name = v.dept_name and dd.institution_id = di.id;
 
--- ---------- OFFICERS ----------
 insert into public.officers (institution_id, department_id, name, phone, email)
 select i.id, d.id, v.name, v.phone, v.email
 from (values
@@ -103,12 +84,6 @@ from (values
 join public.institutions i on i.code = v.inst_code
 left join public.departments d on d.institution_id = i.id and d.name = v.dept_name;
 
-
--- ============================================================================
--- DEMO AUTH USERS (password hashes are bcrypt of 'DemoPass123!' -- for the
--- hackathon demo only; must be rotated before real deployment).
--- Note: crypt() from pgcrypto generates the same bcrypt format Supabase uses.
--- ============================================================================
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password,
   email_confirmed_at, created_at, updated_at,
@@ -139,7 +114,6 @@ from (values
 ) as v(email, full_name)
 where not exists (select 1 from auth.users au where au.email = v.email);
 
--- ---------- PROFILES ----------
 insert into public.profiles (user_id, email, role, full_name)
 select u.id, u.email,
   case
@@ -159,14 +133,13 @@ where u.email in (
 )
 on conflict (user_id) do nothing;
 
--- Link officers table rows to their auth users
 update public.officers o
 set user_id = u.id
 from auth.users u
 where lower(u.email) = lower(o.email)
   and o.user_id is null;
 
--- Identity seed for auth.identities (Supabase expects one per user/provider)
+-- Supabase expects one identity per user/provider
 insert into auth.identities (id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at)
 select gen_random_uuid(), u.id, u.id, 'email',
   jsonb_build_object('sub', u.id::text, 'email', u.email, 'email_verified', true),
@@ -183,13 +156,6 @@ where u.email in (
 and not exists (
   select 1 from auth.identities i where i.user_id = u.id and i.provider = 'email'
 );
-
-
--- ============================================================================
--- DEMO COMPLAINTS: seeded through the REAL submit_complaint function so the
--- routing engine, grouping, timeline, and notifications are exercised exactly
--- as in production.
--- ============================================================================
 
 create temp table _demo_batch (
   title text, description text, cat uuid, conf numeric,
@@ -250,7 +216,6 @@ from (values
 ) as v(title, description, slug, conf, urgency, lat, lng, region, council, ward, channel, cname, cphone, anon)
 join public.categories c on c.slug = v.slug;
 
--- Submit each through the production intake function
 select public.submit_complaint(
   b.title, b.description, b.cat, b.conf, b.urgency,
   b.lat, b.lng, b.region, b.council, b.ward,
@@ -260,14 +225,7 @@ from _demo_batch b;
 
 drop table _demo_batch;
 
-
--- ============================================================================
--- LIFECYCLE ADVANCES: push specific demo cases through officer actions so the
--- demo has cases in every state. Uses the REAL officer RPCs (with a temporary
--- security-definer wrapper that impersonates the officer's auth context).
--- ============================================================================
-
--- Helper: run an officer action as a given officer user (demo only)
+-- pushes demo cases through the real officer RPCs (via _demo_as_officer impersonation) so every state exists
 create or replace function public._demo_as_officer(
   p_email text,
   p_action text,
@@ -309,13 +267,11 @@ begin
   if v_ok then return 'ok'; else return 'rejected'; end if;
 end $$;
 
--- Pick representative cases and advance them
 do $life$
 declare
   r record;
   v_id uuid;
 begin
-  -- 1) KMC waste case (Serekunda Market dumpster): accept -> in_progress -> citizen_confirmation
   select c.id into v_id from public.complaints c
   join public.categories cat on cat.id = c.category_id
   where cat.slug = 'waste_collection' and c.title like 'Overflowing dumpster%'
@@ -325,7 +281,6 @@ begin
   perform public._demo_as_officer('fatou.ceesay@kmc.gm', 'note', v_id, null, null, 'Sanitation crew dispatched for tomorrow 7am pickup.');
   perform public._demo_as_officer('fatou.ceesay@kmc.gm', 'status', v_id, 'citizen_confirmation', null, 'Dumpster emptied and area washed. Photo attached by crew.');
 
-  -- 2) NAWEC water outage group: accept + in_progress (stays open for group demo)
   for r in
     select c.id from public.complaints c
     join public.categories cat on cat.id = c.category_id
@@ -337,7 +292,6 @@ begin
     perform public._demo_as_officer('musa.darboe@nawec.gm', 'status', r.id, 'in_progress');
   end loop;
 
-  -- 3) One overdue case: accept then push deadline into the past
   select c.id into v_id from public.complaints c
   join public.categories cat on cat.id = c.category_id
   where cat.slug = 'pollution' and c.title like 'Factory smoke%'
@@ -347,10 +301,6 @@ begin
      set expected_response_at = now() - interval '2 hours'
    where id = v_id;
 
-  -- 4) Several received (auto-routed, unaccepted): leave as-is (majority)
-
-  -- 5) A couple resolved->closed pairs for stats
-  -- 5a. Pothole Kairaba: full lifecycle to closed via citizen confirmation
   select c.id into v_id from public.complaints c
   join public.categories cat on cat.id = c.category_id
   where cat.slug = 'local_roads' and c.title like 'Pothole on Kairaba%'
@@ -365,7 +315,6 @@ begin
      set citizen_message = 'Resolution confirmed by citizen. Thank you.'
    where complaint_id = v_id and citizen_message like 'Crew reports fixed%';
 
-  -- 5b. Water leak Westfield: resolved older than 72h -> will be auto-closed by sweep
   select c.id into v_id from public.complaints c
   join public.categories cat on cat.id = c.category_id
   where cat.slug = 'water_supply' and c.title like 'Water leak at Westfield%'
@@ -376,16 +325,13 @@ begin
      set resolved_at = now() - interval '80 hours'
    where id = v_id;
 
-  -- 5c. One rejected case with reason
   select c.id into v_id from public.complaints c
   join public.categories cat on cat.id = c.category_id
   where cat.slug = 'markets' and c.title like 'Market stall dispute%'
   order by c.created_at limit 1;
   perform public._demo_as_officer('fatou.ceesay@kmc.gm', 'reject', v_id, null, null, 'This is a private dispute between vendors; please seek mediation at the bantaba.');
 
-  -- 6) Education cases: route manually to BCC/BAC is not needed; leave in Central Desk queue
 end $life$;
 
--- Run the sweeps so escalation + auto-close states exist in demo data
 select public.fn_run_escalation_sweep();
 select public.fn_run_autoclose_sweep();
