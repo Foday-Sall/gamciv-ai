@@ -1,0 +1,125 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+:root {
+  /* Admin console: dark graphite surfaces with a restrained green accent.
+     One administrator, institution accounts, audit-first UI. */
+  --background: #0a0e14;
+  --foreground: #e6ebf2;
+
+  --card: #101620;
+  --card-foreground: #e6ebf2;
+
+  --popover: #131a26;
+  --popover-foreground: #e6ebf2;
+
+  --primary: #2f9e6e;
+  --primary-foreground: #06130d;
+
+  --secondary: #1a2230;
+  --secondary-foreground: #e6ebf2;
+
+  --muted: #1a2230;
+  --muted-foreground: #8a94a6;
+
+  --accent: #26354a;
+  --accent-foreground: #e6ebf2;
+
+  --destructive: #e5484d;
+  --destructive-foreground: #ffffff;
+
+  --border: #1f2735;
+  --input: #232d3d;
+  --ring: #2f9e6e;
+
+  --radius: 0.625rem;
+
+  /* Working colors used by badges, charts and status marks */
+  --ok: #2f9e6e;
+  --warn: #d9a03f;
+  --danger: #e5484d;
+  --info: #4f8fd9;
+
+  /* Chart series tints */
+  --chart-1: #2f9e6e;
+  --chart-2: #4f8fd9;
+  --chart-3: #d9a03f;
+  --chart-4: #b06bd8;
+  --chart-5: #e5484d;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Lexend", "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  ::selection {
+    background: rgba(47, 158, 110, 0.28);
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Subtle top highlight on dark cards */
+  .card-sheen {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 40%);
+  }
+  /* Slim scrollbar for the dark shell */
+  .slim-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .slim-scroll::-webkit-scrollbar-thumb {
+    background: #232d3d;
+    border-radius: 8px;
+  }
+  .slim-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
