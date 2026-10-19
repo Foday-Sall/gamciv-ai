@@ -265,7 +265,6 @@ Deno.test("signature: invalid signature rejected 401, no side effects", async ()
 });
 
 Deno.test("signature: tampered body with valid-format sig rejected 401", async () => {
-  const { deps } = makeDeps();
   const req = await signedRequestAsync(
     JSON.stringify(textWebhook("No water in Bakoteh")),
   );

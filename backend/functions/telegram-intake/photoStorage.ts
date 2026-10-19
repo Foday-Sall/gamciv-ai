@@ -9,7 +9,7 @@
  * store instead is just `bucket/object-path` (or the bare Telegram file path
  * with no token when the upload fails) — nothing secret, nothing expiring.
  */
-import { PHOTO_BUCKET, PHOTO_PREFIX } from "./telegram.ts";
+import { PHOTO_BUCKET } from "./telegram.ts";
 
 /** Size guard for a downloaded photo (10 MB, generous vs Telegram's 20MB API limit). */
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
