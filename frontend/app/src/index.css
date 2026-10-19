@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+:root {
+  /* Surfaces */
+  --background: #f9f4e8; /* sand paper — app background */
+  --foreground: #1c2420; /* cooler near-black, harmonizes with green */
+  --card: #ffffff;
+  --card-foreground: #1c2420;
+  --popover: #ffffff;
+  --popover-foreground: #1c2420;
+
+  /* Actions — green owns every interactive moment */
+  --primary: #146c43; /* deep river green — buttons, active nav, links */
+  --primary-foreground: #ffffff;
+  --secondary: #f0e7d3; /* deeper sand — icon chips, muted fills */
+  --secondary-foreground: #1c2420;
+  --muted: #f3ebda;
+  --muted-foreground: #6b7268; /* neutral gray-green, 4.75:1 on sand */
+  --accent: #f0e7d3; /* ★ neutral sand — shadcn hover/focus states tint sand, not gold */
+  --accent-foreground: #1c2420;
+  --destructive: #c0392b; /* terracotta red */
+
+  --border: #e5dcc6;
+  --input: #e3d9c2;
+  --ring: #146c43;
+  --radius: 0.5rem;
+
+  /* Brand gold — DIMMED, tint-pair. Two uses only: brand mark + submit success. */
+  --gold: #d99a00; /* decorative shapes only (2.45:1 on white) */
+  --gold-deep: #9c6a00; /* gold text/icons on light (4.69:1) */
+  --gold-tint: #fdf3d8; /* gold wash — badge/pill background */
+  --gold-ink: #2b2111; /* body text on gold-tint */
+
+  /* Hairlines */
+  --clay: #a89478;
+  --clay-soft: rgba(168, 148, 120, 0.12);
+  --clay-fog: rgba(168, 148, 120, 0.18);
+  --clay-line: rgba(168, 148, 120, 0.38);
+
+  /* Legacy names kept mid-refactor */
+  --terracotta: #a64b26;
+  --band: #123b29;
+  --band-cream: #f9f4e8;
+  --band-muted: #cbba88;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: #ffffff;
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: #ffffff;
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-clay: var(--clay);
+  --color-clay-line: var(--clay-line);
+  --color-clay-soft: var(--clay-soft);
+  --color-clay-fog: var(--clay-fog);
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-gold-tint: var(--gold-tint);
+  --color-gold-ink: var(--gold-ink);
+  --color-terracotta: var(--terracotta);
+  --color-band: var(--band);
+  --color-band-cream: var(--band-cream);
+  --color-band-muted: var(--band-muted);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Lexend", "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 17px;
+    line-height: 1.65;
+  }
+  /* Accessible focus: every interactive element gets a visible ring on keyboard focus */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+  ::selection {
+    background: var(--clay-fog);
+  }
+}
+
+@layer utilities {
+  /* Hairline in the clay tone for dividers that carry structure */
+  .hairline-t {
+    border-top: 1px solid var(--clay-line);
+  }
+  .hairline-b {
+    border-bottom: 1px solid var(--clay-line);
+  }
+  .tile-wash {
+    background: var(--clay-soft);
+  }
+  .tabular {
+    font-variant: tabular-nums;
+  }
+}
