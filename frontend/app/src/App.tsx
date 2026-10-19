@@ -2,12 +2,15 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import AppShell from '@/components/AppShell'
 import { useIsDesktop } from '@/hooks/useIsDesktop'
-import Home from '@/pages/Home'
+import HomeGate from '@/pages/HomeGate'
 import Auth from '@/pages/Auth'
 import Report from '@/pages/Report'
 import Track from '@/pages/Track'
 import Profile from '@/pages/Profile'
 import MyReports from '@/pages/MyReports'
+import InstituteDashboard from '@/pages/InstituteDashboard'
+import VerifyEmail from '@/pages/VerifyEmail'
+import VerifyPhone from '@/pages/VerifyPhone'
 
 /** Toaster position: bottom-right on desktop, top-center on mobile (spec §6). */
 function PositionedToaster() {
@@ -20,6 +23,10 @@ export default function App() {
     <>
       <PositionedToaster />
       <Routes>
+        {/* Verification screens: OTP entry, reachable with or without a session */}
+        <Route path="/verify/email" element={<VerifyEmail />} />
+        <Route path="/verify/phone" element={<VerifyPhone />} />
+
         {/* Auth pages bypass the shell */}
         <Route path="/login" element={<Auth key="signin" initialMode="signin" />} />
         <Route path="/signup" element={<Auth key="signup" initialMode="signup" />} />
@@ -27,7 +34,8 @@ export default function App() {
         {/* Shell layout: top bar + bottom tabs (mobile) + desktop nav */}
         <Route element={<AppShell />}>
           <Route path="/" element={<Navigate to="/home" replace />} />
-          <Route path="/home" element={<Home />} />
+          <Route path="/home" element={<HomeGate />} />
+          <Route path="/institute" element={<InstituteDashboard />} />
           <Route path="/report" element={<Report />} />
           <Route path="/track" element={<Track />} />
           <Route path="/profile" element={<Profile />} />

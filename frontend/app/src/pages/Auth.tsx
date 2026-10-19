@@ -231,7 +231,8 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
           // role), but respect the actual profile role just in case.
           const routed = await routeByRole(data.session.user.id)
           if (routed !== 'staff') {
-            navigate('/home', { replace: true })
+            // New accounts must confirm their email (OTP) before using the app.
+            navigate('/verify/email', { replace: true })
           }
         } else {
           // Email confirmation is required on this server.
@@ -256,7 +257,11 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
           ? await routeByRole(loginData.session.user.id)
           : null
         if (routed !== 'staff') {
-          navigate('/home', { replace: true })
+          // Unconfirmed email? Send to the OTP verification screen first.
+          const unconfirmed =
+            loginData.session?.user?.email_confirmed_at == null &&
+            loginData.session?.user?.id != null
+          navigate(unconfirmed ? '/verify/email' : '/home', { replace: true })
         }
       }
     } finally {
