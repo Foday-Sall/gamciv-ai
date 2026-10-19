@@ -140,6 +140,37 @@ Deno.test("notify-out: missing recipient records failure without sending", async
   assertEquals(recorded.rpcCalls.length, 2);
 });
 
+// ---- Explicit channel routing: email and unknown channels must NOT go to WhatsApp ----
+
+Deno.test("notify-out: email channel fails explicitly, no WhatsApp send", async () => {
+  const { deps, recorded } = makeDeps({ claim: makeClaim({ channel: "email" }) });
+  const res = await handleRequest(req("d19617d7-bb02-4ef4-b848-5201e16f621f"), deps, "testkey");
+  assertEquals(res.status, 200);
+  const json = await res.json();
+  assertEquals(json.status, "failed");
+  assertEquals(json.channel, "email");
+  // No provider sends happened.
+  assertEquals(recorded.gowaSends.length, 0);
+  // The failure was recorded back to the DB.
+  assertEquals(recorded.rpcCalls.length, 2);
+  assertEquals(recorded.rpcCalls[1].fn, "notify_out_result");
+  assertEquals((recorded.rpcCalls[1].args as Record<string, unknown>).p_status, "failed");
+  assertEquals(
+    (recorded.rpcCalls[1].args as Record<string, unknown>).p_error,
+    'channel "email" is not yet supported by notify-out',
+  );
+});
+
+Deno.test("notify-out: unknown channel fails explicitly, no WhatsApp send", async () => {
+  const { deps, recorded } = makeDeps({ claim: makeClaim({ channel: "carrier_pigeon" }) });
+  const res = await handleRequest(req("d19617d7-bb02-4ef4-b848-5201e16f621f"), deps, "testkey");
+  const json = await res.json();
+  assertEquals(json.status, "failed");
+  assertEquals(json.channel, "carrier_pigeon");
+  assertEquals(recorded.gowaSends.length, 0);
+  assertEquals((recorded.rpcCalls[1].args as Record<string, unknown>).p_status, "failed");
+});
+
 Deno.test("notify-out: wrong key → 401", async () => {
   const { deps } = makeDeps();
   const res = await handleRequest(req("d19617d7-bb02-4ef4-b848-5201e16f621f"), deps, "testkey");
@@ -262,7 +293,7 @@ Deno.test("smsProvider: http_gateway sends TextBee-shaped request with x-api-key
   assertEquals(body.message, "Hello from GamCiv");
 });
 
-Deno.test("smsProvider: http_gateway accepts queued batch without success flag", async () => {
+Deno.test("smsProvider: http_gateway accepts pending batch without success flag", async () => {
   const client = new FetchHttpGatewayClient(
     {
       baseUrl: "https://api.textbee.dev/api/v1",

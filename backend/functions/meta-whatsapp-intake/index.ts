@@ -23,6 +23,7 @@
 import { FetchAiClient, loadAiConfig } from "../_shared/aiClient.ts";
 import { loadAppConfig } from "../_shared/config.ts";
 import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { bounded, bodyTooLarge, FIELD_LIMITS } from "../_shared/limits.ts";
 import { PostgrestRpcClient, type RpcClient } from "../_shared/rpcClient.ts";
 import type {
   ComplaintUrgency,
@@ -104,6 +105,12 @@ export async function handleRequest(
     return errorResponse(401, "invalid webhook signature");
   }
 
+  // Reject oversized bodies before parsing (verified above, so it's a real
+  // Meta delivery with an anomalous size — still refuse, don't process).
+  if (bodyTooLarge(raw.byteLength)) {
+    return errorResponse(413, "request body too large");
+  }
+
   const envelope = parseMetaEnvelope(new TextDecoder().decode(raw));
   if (!envelope) return errorResponse(400, "invalid JSON body");
 
@@ -175,10 +182,14 @@ export async function processReport(
   }
 
   // 2) ONE hop into the DB — routing, deadlines, grouping all live in SQL.
+  //    Field sizes are capped here AND re-checked in the SQL wrapper.
   const args: SubmitComplaintArgs = {
-    p_title: makeTitle(msg),
-    p_description: msg.body || "Photo report sent via Meta WhatsApp (no caption)",
-    p_category_hint: categoryHint,
+    p_title: makeTitle(msg) ? bounded(makeTitle(msg), FIELD_LIMITS.title) : null,
+    p_description: bounded(
+      msg.body || "Photo report sent via Meta WhatsApp (no caption)",
+      FIELD_LIMITS.description,
+    ) ?? "",
+    p_category_hint: bounded(categoryHint, FIELD_LIMITS.categoryHint),
     p_urgency_hint: urgencyHint,
     p_lat: msg.lat,
     p_lng: msg.lng,
@@ -187,13 +198,13 @@ export async function processReport(
     p_ward: null,
     p_photo_url: mediaReference(msg),
     p_channel: "whatsapp",
-    p_citizen_name: msg.name,
-    p_citizen_phone: msg.waId,
+    p_citizen_name: bounded(msg.name, FIELD_LIMITS.citizenName),
+    p_citizen_phone: bounded(msg.waId, FIELD_LIMITS.citizenPhone, { trim: false }),
     p_is_anonymous: !msg.name,
-    p_ai_category: categoryHint,
+    p_ai_category: bounded(categoryHint, FIELD_LIMITS.categoryHint),
     p_ai_urgency: urgencyHint,
     p_confidence: msg.body ? confidence : null,
-    p_external_id: msg.messageId,
+    p_external_id: bounded(msg.messageId, FIELD_LIMITS.externalId, { trim: false }),
   };
 
   const result = await deps.rpc.call<SubmitComplaintArgs, SubmitComplaintResult>(
@@ -243,12 +254,23 @@ function makeTitle(msg: MetaMessage): string | null {
 }
 
 /**
- * Image handling: prefer the media id (kept retrievable via
- * GET /{phone-number-id}/{media-id} with the same token); the short-lived
- * webhook URL is the fallback so the SQL side can store a reference.
+ * Image handling: store a token-free, non-expiring reference only.
+ *
+ * Prefer the Cloud API media id (re-downloadable via
+ * GET /{phone-number-id}/{media-id} with the stored credential) — the
+ * short-lived webhook URL requires the access token to fetch, so storing it
+ * would (a) leak a credential-gated URL into the DB and (b) break within 24h.
+ * The bare media id contains no secret and never expires.
  */
 function mediaReference(msg: MetaMessage): string | null {
-  return msg.mediaId ?? msg.mediaUrl;
+  if (msg.mediaId) return msg.mediaId;
+  // Legacy fallback: only when no media id exists. Strip any credential
+  // fragment/query before persisting, and cap the length.
+  if (msg.mediaUrl) {
+    const stripped = msg.mediaUrl.split("?")[0].split("#")[0];
+    return bounded(stripped, FIELD_LIMITS.photoUrl, { trim: false });
+  }
+  return null;
 }
 
 /** Mirrors the shared IntakeOutcome shape (kept local to avoid editing _shared). */

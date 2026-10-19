@@ -1,6 +1,11 @@
 -- 0010b_wrapper.sql — API-contract submit_complaint wrapper
 -- Maps the edge function's contract params onto submit_complaint_core.
 -- Matches docs/sql-contract.md exactly.
+--
+-- 2026-10: input size limits (defence-in-depth with the edge functions'
+-- _shared/limits.ts): oversized values are rejected here at the DB boundary
+-- so no path (function bug, direct PostgREST call, dashboard SQL editor) can
+-- write unbounded text into the complaints tables.
 
 CREATE OR REPLACE FUNCTION public.submit_complaint(
   p_title text,
@@ -38,6 +43,34 @@ DECLARE
   v_final_urgency text;
   v_conf numeric;
 BEGIN
+  -- ------------------------------------------------------------------
+  -- Input size limits (reject, don't truncate: callers should know).
+  -- ------------------------------------------------------------------
+  IF p_title IS NOT NULL AND char_length(p_title) > 200 THEN
+    RAISE EXCEPTION 'p_title exceeds 200 characters';
+  END IF;
+  IF char_length(p_description) > 2000 THEN
+    RAISE EXCEPTION 'p_description exceeds 2000 characters';
+  END IF;
+  IF p_photo_url IS NOT NULL AND char_length(p_photo_url) > 500 THEN
+    RAISE EXCEPTION 'p_photo_url exceeds 500 characters';
+  END IF;
+  IF p_citizen_name IS NOT NULL AND char_length(p_citizen_name) > 100 THEN
+    RAISE EXCEPTION 'p_citizen_name exceeds 100 characters';
+  END IF;
+  IF p_citizen_phone IS NOT NULL AND char_length(p_citizen_phone) > 20 THEN
+    RAISE EXCEPTION 'p_citizen_phone exceeds 20 characters';
+  END IF;
+  IF p_external_id IS NOT NULL AND char_length(p_external_id) > 100 THEN
+    RAISE EXCEPTION 'p_external_id exceeds 100 characters';
+  END IF;
+  IF p_category_hint IS NOT NULL AND char_length(p_category_hint) > 100 THEN
+    RAISE EXCEPTION 'p_category_hint exceeds 100 characters';
+  END IF;
+  IF p_ai_category IS NOT NULL AND char_length(p_ai_category) > 100 THEN
+    RAISE EXCEPTION 'p_ai_category exceeds 100 characters';
+  END IF;
+
   -- resolve category: p_ai_category (authoritative) else p_category_hint
   v_final_category := COALESCE(p_ai_category, p_category_hint);
   v_final_urgency  := COALESCE(p_ai_urgency, p_urgency_hint, 'normal');
@@ -55,9 +88,21 @@ BEGIN
     WHERE c.external_id = p_external_id
     LIMIT 1;
     IF FOUND THEN
+      SELECT i.code, i.name, d.name
+      INTO v_inst_code, v_inst_name, v_dept_name
+      FROM public.complaints c2
+      LEFT JOIN public.institutions i ON i.id = c2.institution_id
+      LEFT JOIN public.departments d ON d.id = c2.department_id
+      WHERE c2.id = v_result.id;
       RETURN jsonb_build_object(
         'complaint_id', v_result.id,
         'tracking_no', v_result.tracking_no,
+        'institution', v_inst_code,
+        'institution_name', v_inst_name,
+        'department', v_dept_name,
+        'expected_response_at', v_result.expected_response_at,
+        'confidence', v_result.ai_confidence,
+        'sensitive', v_result.is_sensitive,
         'duplicate', true
       );
     END IF;
@@ -82,6 +127,11 @@ BEGIN
     p_citizen_phone => p_citizen_phone,
     p_is_anonymous  => p_is_anonymous
   );
+
+  -- external_id bookkeeping for dedupe (idempotency key from the webhook)
+  UPDATE public.complaints
+  SET external_id = p_external_id
+  WHERE id = v_result.id AND p_external_id IS NOT NULL;
 
   -- enrich result with institution info
   SELECT i.code, i.name, d.name, COALESCE(cat.is_sensitive, false)

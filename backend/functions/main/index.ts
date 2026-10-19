@@ -124,7 +124,13 @@ async function isValidHybridJWT(jwt: string): Promise<boolean> {
   return false;
 }
 
-Deno.serve(async (req: Request) => {
+/**
+ * Dispatcher request handler. Wrapped in a catch-all at the bottom of the file
+ * so runtime failures (worker spawn errors, unexpected exceptions) never leak
+ * stack traces or error text to clients — they return a generic JSON body and
+ * log the details server-side instead.
+ */
+async function handle(req: Request): Promise<Response> {
   if (req.method !== "OPTIONS" && VERIFY_JWT) {
     try {
       const token = getAuthToken(req);
@@ -137,8 +143,10 @@ Deno.serve(async (req: Request) => {
         });
       }
     } catch (e) {
-      console.error(e);
-      return new Response(JSON.stringify({ msg: String(e) }), {
+      // Missing/malformed Authorization header. Details stay in the server log;
+      // the client gets a generic message.
+      console.error("auth header validation failed:", e);
+      return new Response(JSON.stringify({ msg: "Invalid JWT" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
       });
@@ -179,10 +187,21 @@ Deno.serve(async (req: Request) => {
     });
     return await worker.fetch(req);
   } catch (e) {
-    const error = { msg: String(e) };
-    return new Response(JSON.stringify(error), {
+    // Worker spawn/boot failure: log the real error server-side, return a
+    // generic body so clients never see stack traces or error text.
+    console.error(`worker dispatch failed for ${service_name}:`, e);
+    return new Response(JSON.stringify({ msg: "internal error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });
   }
-});
+}
+
+Deno.serve((req: Request) => handle(req).catch((e) => {
+  // Catch-all: anything that escapes the handler returns a generic response.
+  console.error("unhandled dispatcher error:", e);
+  return new Response(JSON.stringify({ msg: "internal error" }), {
+    status: 500,
+    headers: { "Content-Type": "application/json" },
+  });
+}));

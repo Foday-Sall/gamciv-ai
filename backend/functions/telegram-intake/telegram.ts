@@ -10,10 +10,19 @@
 
 export class TelegramError extends Error {}
 
+/** Bucket that stores intake photos (created by the DB/storage track). */
+export const PHOTO_BUCKET = "complaint-photos";
+/** Object prefix for Telegram-origin photos inside PHOTO_BUCKET. */
+export const PHOTO_PREFIX = "telegram";
+
 /** Minimal surface the intake pipeline needs; stubbed in tests. */
 export interface TelegramClient {
   sendMessage(chatId: string, text: string): Promise<{ messageId?: number }>;
-  /** Resolve a photo file_id to a downloadable URL (null if unresolvable). */
+  /**
+   * Resolve a photo file_id to a downloadable URL (null if unresolvable).
+   * The URL embeds the bot token and is valid ~1h — it must never be stored;
+   * consume it immediately (see storePhotoFromUrl in photoStorage.ts).
+   */
   getPhotoUrl(fileId: string): Promise<string | null>;
 }
 

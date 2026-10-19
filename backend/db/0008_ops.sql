@@ -141,7 +141,19 @@ end $cron$;
 -- PUBLIC TRACKING: anonymous timeline lookup by tracking code.
 -- Sensitive cases return only status + timestamps (no description/location).
 -- Used by the public tracking page (GET /reports/:tracking_no).
--- ---------------------------------------------------------------------------
+-- ----------------------------------------------------------------------------
+-- PUBLIC TRACKING: anonymous timeline lookup by tracking code.
+-- SECURITY FIX (2026-10-19, applied LIVE): sensitive cases (is_sensitive=true)
+-- now return ONLY tracking_no + status -- institution, department, urgency,
+-- expected_response_at, resolved_at and closed_at are nulled and the timeline
+-- is a single generic message. Previously institution/urgency/response times
+-- and the real timeline leaked for sensitive complaints. Non-sensitive
+-- complaints keep the full projection, identical to the original logic.
+-- NOTE: on the live DB, anon/authenticated EXECUTE on this function was
+-- already absent before this fix (earlier hardening) and was left as found;
+-- the grant below is kept for fresh deployments (sibling functions grant it).
+-- Used by the public tracking page (GET /reports/:tracking_no).
+-- ----------------------------------------------------------------------------
 create or replace function public.track_complaint(
   p_tracking_no text
 ) returns jsonb
@@ -158,12 +170,34 @@ begin
     return null;
   end if;
 
+  -- SENSITIVE: minimal projection only (tracking_no + status)
+  if c.is_sensitive then
+    return jsonb_build_object(
+      'tracking_no', c.tracking_no,
+      'status', c.status,
+      'urgency', null,
+      'title', null,
+      'description', null,
+      'institution', null,
+      'department', null,
+      'expected_response_at', null,
+      'resolved_at', null,
+      'closed_at', null,
+      'timeline', jsonb_build_array(jsonb_build_object(
+        'status', c.status,
+        'message', 'This report is under review. Contact the office for updates.',
+        'at', null
+      ))
+    );
+  end if;
+
+  -- NON-SENSITIVE: full projection (unchanged behavior)
   return jsonb_build_object(
     'tracking_no', c.tracking_no,
     'status', c.status,
     'urgency', c.urgency,
-    'title', case when c.is_sensitive then null else c.title end,
-    'description', case when c.is_sensitive then null else c.description end,
+    'title', c.title,
+    'description', c.description,
     'institution', (select name from public.institutions where id = c.institution_id),
     'department', (select name from public.departments where id = c.department_id),
     'expected_response_at', c.expected_response_at,

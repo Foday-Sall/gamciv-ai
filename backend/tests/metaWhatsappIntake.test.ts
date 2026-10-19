@@ -573,6 +573,43 @@ Deno.test("handleRequest: invalid JSON body rejected 400", async () => {
   assertEquals(res.status, 400);
 });
 
+Deno.test("handleRequest: oversized body rejected 413 before parsing", async () => {
+  const { deps, recorded } = makeDeps();
+  const res = await handleRequest(
+    await signedRequestAsync("x".repeat(513 * 1024)),
+    deps,
+    "mytoken",
+    "metasecret",
+  );
+  assertEquals(res.status, 413);
+  assertEquals(recorded.rpcCalls.length, 0);
+});
+
+Deno.test("processReport: oversized fields are truncated to the shared limits", async () => {
+  const { deps, recorded } = makeDeps();
+  const longBody = "water ".repeat(500); // 3000 chars > 2000 limit
+  const webhook = {
+    object: "whatsapp_business_account",
+    entry: [{
+      id: "1",
+      changes: [{
+        value: {
+          contacts: [{ profile: { name: "N".repeat(150) }, wa_id: "2207123456" }],
+          messages: [{ from: "2207123456", id: "wamid.LONG1", type: "text", text: { body: longBody } }],
+        },
+        field: "messages",
+      }],
+    }],
+  };
+  const m = extractMessages(webhook)![0];
+  await processReport(m, deps);
+  const args = recorded.rpcCalls[0].args as SubmitComplaintArgs;
+  assertEquals(args.p_description.length, 2000);
+  assertEquals(args.p_citizen_name!.length, 100);
+  // makeTitle caps the first line at 80 (inner function), outer bounded() keeps it ≤ 200
+  assertEquals(args.p_title!.length, 80);
+});
+
 Deno.test("handleRequest: AI failure still files the report (hints null)", async () => {
   const { deps, recorded } = makeDeps({ ai: new Error("ai down") });
   const body = JSON.stringify(textWebhook("No water in Bakoteh"));

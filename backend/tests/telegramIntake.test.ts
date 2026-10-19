@@ -160,6 +160,18 @@ Deno.test("handleRequest: invalid JSON body rejected 400", async () => {
   assertEquals(res.status, 400);
 });
 
+Deno.test("handleRequest: oversized body rejected 413 before parsing", async () => {
+  const { deps, recorded } = makeDeps();
+  const req = new Request("https://example.com/telegram-intake", {
+    method: "POST",
+    headers: { "X-Telegram-Bot-Api-Secret-Token": "tgsecret" },
+    body: "x".repeat(513 * 1024), // just over the 512KB cap
+  });
+  const res = await handleRequest(req, deps, "tgsecret");
+  assertEquals(res.status, 413);
+  assertEquals(recorded.rpcCalls.length, 0);
+});
+
 // ---------------------------------------------------------------------------
 // Text message pipeline
 // ---------------------------------------------------------------------------
@@ -218,30 +230,61 @@ Deno.test("processReport: AI failure still files the report (hints null)", async
 // Photo message pipeline
 // ---------------------------------------------------------------------------
 
-Deno.test("processReport: photo resolves through getFile and is stored", async () => {
-  const fileUrl = "https://api.telegram.org/file/botTOKEN/photos/file_10.jpg";
-  const { deps, recorded } = makeDeps({ fileMap: { photo123: fileUrl } });
-  const update = {
-    message: {
-      message_id: 222,
-      from: { id: 777, first_name: "Lamin" },
-      chat: { id: 777, type: "private" },
-      caption: "Broken pipe flooding the street",
-      photo: [
-        { file_id: "photo_small", width: 90, height: 90 },
-        { file_id: "photo123", width: 1280, height: 960 },
-      ],
-    },
-  };
-  const report = extractReport(update)!;
-  assertEquals(report.photoFileId, "photo123"); // largest size picked
-  assertEquals(report.body, "Broken pipe flooding the street");
+Deno.test("processReport: photo is downloaded and stored in the bucket (no token URL persisted)", async () => {
+  // Real getPhotoUrl returns a token-bearing, short-lived URL. It must be
+  // consumed in-process; only the token-free bucket reference is persisted.
+  const tokenUrl = "https://api.telegram.org/file/botSECRETTOKEN123/photos/file_10.jpg";
+  let downloadedFrom: string | null = null;
+  let uploadedTo: string | null = null;
 
-  await processReport(report, deps);
-  assertEquals(recorded.getFileCalls, ["photo123"]);
-  const args = recorded.rpcCalls[0].args as SubmitComplaintArgs;
-  assertEquals(args.p_photo_url, fileUrl);
-  assertEquals(args.p_external_id, "tg:777:222");
+  // Simulate storage env being present (Deno.env in tests).
+  Deno.env.set("SUPABASE_URL", "http://127.0.0.1:54321");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-service-key");
+
+  const { deps, recorded } = makeDeps({ fileMap: { photo123: tokenUrl } });
+  const realFetch = globalThis.fetch;
+  try {
+    (globalThis as { fetch: typeof fetch }).fetch = ((url: string | URL, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes("api.telegram.org/file/bot")) {
+        downloadedFrom = u;
+        return Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } }));
+      }
+      if (u.includes("/storage/v1/object/")) {
+        uploadedTo = u;
+        return Promise.resolve(new Response(JSON.stringify({ Key: "x" }), { status: 200 }));
+      }
+      return realFetch(url, init);
+    }) as typeof fetch;
+
+    const update = {
+      message: {
+        message_id: 222,
+        from: { id: 777, first_name: "Lamin" },
+        chat: { id: 777, type: "private" },
+        caption: "Broken pipe flooding the street",
+        photo: [
+          { file_id: "photo_small", width: 90, height: 90 },
+          { file_id: "photo123", width: 1280, height: 960 },
+        ],
+      },
+    };
+    const report = extractReport(update)!;
+    assertEquals(report.photoFileId, "photo123"); // largest size picked
+    assertEquals(report.body, "Broken pipe flooding the street");
+
+    await processReport(report, deps);
+    assertEquals(downloadedFrom, tokenUrl); // token URL consumed in-process only
+    assertEquals(uploadedTo, "http://127.0.0.1:54321/storage/v1/object/complaint-photos/telegram/photo123");
+    assertEquals(recorded.getFileCalls, ["photo123"]);
+    const args = recorded.rpcCalls[0].args as SubmitComplaintArgs;
+    assertEquals(args.p_photo_url, "complaint-photos/telegram/photo123"); // token-free
+    assertEquals(args.p_photo_url!.includes("bot"), false);
+    assertEquals(args.p_external_id, "tg:777:222");
+  } finally {
+    (globalThis as { fetch: typeof fetch }).fetch = realFetch;
+    Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+  }
 });
 
 Deno.test("processReport: getFile failure files the report without photo (no loss)", async () => {
@@ -262,20 +305,75 @@ Deno.test("processReport: getFile failure files the report without photo (no los
   assertEquals(args.p_description, "Dumping site near school");
 });
 
+Deno.test("processReport: upload failure stores token-free fallback reference (never the token URL)", async () => {
+  const tokenUrl = "https://api.telegram.org/file/botSECRETTOKEN456/photos/broken.jpg";
+  Deno.env.set("SUPABASE_URL", "http://127.0.0.1:54321");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-service-key");
+  const { deps, recorded } = makeDeps({ fileMap: { photoBad: tokenUrl } });
+  const realFetch = globalThis.fetch;
+  try {
+    (globalThis as { fetch: typeof fetch }).fetch = ((_url: string | URL, _init?: RequestInit) => {
+      // Download works, upload always fails.
+      if (String(_url).includes("api.telegram.org")) {
+        return Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+      }
+      return Promise.resolve(new Response("boom", { status: 500 }));
+    }) as typeof fetch;
+
+    const update = {
+      message: {
+        message_id: 334,
+        from: { id: 890, first_name: "Fatou" },
+        chat: { id: 890, type: "private" },
+        caption: "Fallen tree on the road",
+        photo: [{ file_id: "photoBad", width: 500, height: 400 }],
+      },
+    };
+    await processReport(extractReport(update)!, deps);
+    const args = recorded.rpcCalls[0].args as SubmitComplaintArgs;
+    assertEquals(args.p_photo_url, "telegram/photoBad"); // bare, token-free ref
+    assertEquals(args.p_photo_url!.includes("botSECRETTOKEN"), false);
+    assertEquals(args.p_photo_url!.includes("http"), false);
+  } finally {
+    (globalThis as { fetch: typeof fetch }).fetch = realFetch;
+    Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+  }
+});
+
 Deno.test("processReport: photo without caption still files with generated description", async () => {
-  const { deps, recorded } = makeDeps({ fileMap: { photoQ: "https://f/q.jpg" } });
-  const update = {
-    message: {
-      message_id: 444,
-      from: { id: 999, first_name: "Modou" },
-      chat: { id: 999, type: "private" },
-      photo: [{ file_id: "photoQ", width: 100, height: 100 }],
-    },
-  };
-  await processReport(extractReport(update)!, deps);
-  const args = recorded.rpcCalls[0].args as SubmitComplaintArgs;
-  assertEquals(args.p_description, "Photo report sent via Telegram (no caption)");
-  assertEquals(args.p_photo_url, "https://f/q.jpg");
+  Deno.env.set("SUPABASE_URL", "http://127.0.0.1:54321");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-service-key");
+  const tokenUrl = "https://api.telegram.org/file/botSECRETTOKEN789/q.jpg";
+  const { deps, recorded } = makeDeps({ fileMap: { photoQ: tokenUrl } });
+  const realFetch = globalThis.fetch;
+  try {
+    (globalThis as { fetch: typeof fetch }).fetch = ((url: string | URL, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes("api.telegram.org")) {
+        return Promise.resolve(new Response(new Uint8Array([1]), { status: 200 }));
+      }
+      if (u.includes("/storage/v1/object/")) {
+        return Promise.resolve(new Response(JSON.stringify({ Key: "x" }), { status: 200 }));
+      }
+      return realFetch(url, init);
+    }) as typeof fetch;
+
+    const update = {
+      message: {
+        message_id: 444,
+        from: { id: 999, first_name: "Modou" },
+        chat: { id: 999, type: "private" },
+        photo: [{ file_id: "photoQ", width: 100, height: 100 }],
+      },
+    };
+    await processReport(extractReport(update)!, deps);
+    const args = recorded.rpcCalls[0].args as SubmitComplaintArgs;
+    assertEquals(args.p_description, "Photo report sent via Telegram (no caption)");
+    assertEquals(args.p_photo_url, "complaint-photos/telegram/photoQ");
+  } finally {
+    (globalThis as { fetch: typeof fetch }).fetch = realFetch;
+    Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+  }
 });
 
 // ---------------------------------------------------------------------------
