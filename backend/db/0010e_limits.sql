@@ -1,8 +1,4 @@
--- 0010e_limits.sql — server-side input size limits for submit_complaint.
--- The edge functions truncate/validate before the RPC; this wrapper re-checks
--- at the DB boundary so any other caller (dashboard, script, direct PostgREST)
--- also gets explicit errors instead of silently storing oversized rows.
-
+-- 0010e_limits.sql — re-checks input size limits at the DB boundary (edge functions validate first; this catches every other caller)
 CREATE OR REPLACE FUNCTION public.submit_complaint(
   p_title text,
   p_description text,
@@ -39,10 +35,6 @@ DECLARE
   v_final_urgency text;
   v_conf numeric;
 BEGIN
-  -- ------------------------------------------------------------------
-  -- Input size limits (mirror of functions/_shared/limits.ts).
-  -- Hard errors: oversized input is a caller bug, not a truncation case.
-  -- ------------------------------------------------------------------
   IF p_title IS NOT NULL AND char_length(p_title) > 200 THEN
     RAISE EXCEPTION 'p_title exceeds 200 characters';
   END IF;
@@ -144,7 +136,6 @@ BEGIN
   SET external_id = p_external_id
   WHERE id = v_result.id AND p_external_id IS NOT NULL;
 
-  -- enrich result with institution info
   SELECT i.code, i.name, d.name, COALESCE(cat.is_sensitive, false)
   INTO v_inst_code, v_inst_name, v_dept_name, v_sensitive
   FROM public.complaints c

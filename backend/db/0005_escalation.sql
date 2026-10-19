@@ -1,12 +1,4 @@
--- ============================================================================
--- GamCiv AI — 0005_escalation.sql
--- Officer forward/urgency RPCs, escalation sweep, auto-close sweep
--- ============================================================================
-
--- ---------------------------------------------------------------------------
--- OFFICER RPC: forward to another institution (reason REQUIRED).
--- BLUEPRINT §8: status -> forwarded; target becomes new owner; audit row.
--- ---------------------------------------------------------------------------
+-- 0005_escalation.sql — officer forward/urgency RPCs, escalation sweep, auto-close sweep
 create or replace function public.fn_officer_forward(
   p_complaint_id uuid,
   p_institution_id uuid,
@@ -38,12 +30,12 @@ begin
   end if;
 
   if c.institution_id = v_target.id then
-    return false;  -- forwarding to self is a no-op
+    return false;
   end if;
 
   update public.complaints
      set institution_id = v_target.id,
-         department_id  = null,      -- receiving institution assigns its own
+         department_id  = null,
          officer_id     = null,
          status         = 'forwarded',
          expected_response_at = public.fn_calculate_deadline(c.category_id, c.urgency)
@@ -68,9 +60,6 @@ begin
   return true;
 end $$;
 
--- ---------------------------------------------------------------------------
--- OFFICER RPC: change urgency (recomputes SLA deadline)
--- ---------------------------------------------------------------------------
 create or replace function public.fn_officer_set_urgency(
   p_complaint_id uuid,
   p_urgency text
@@ -82,7 +71,7 @@ declare
   c public.complaints%rowtype;
   v_new public.urgency_level;
 begin
-  v_new := p_urgency::public.urgency_level;  -- raises if invalid
+  v_new := p_urgency::public.urgency_level;
 
   if not public.fn_is_officer_of(p_complaint_id) then
     return false;
@@ -111,10 +100,7 @@ begin
   return true;
 end $$;
 
--- ---------------------------------------------------------------------------
--- ESCALATION SWEEP (runs via pg_cron / n8n every 15 min)
--- open statuses + deadline passed -> escalated; notify officer + citizen
--- ---------------------------------------------------------------------------
+-- scheduled every 15 min via pg_cron (0008); n8n can call the sweep directly
 create or replace function public.fn_run_escalation_sweep()
 returns integer
 language plpgsql volatile security definer
@@ -145,7 +131,6 @@ begin
       true
     );
 
-    -- notify citizens in the same group too (group updates)
     perform public.fn_notify_citizen(
       r.id,
       'Your report ' || r.tracking_no ||
@@ -164,10 +149,7 @@ begin
   return v_count;
 end $$;
 
--- ---------------------------------------------------------------------------
--- AUTO-CLOSE SWEEP (runs daily): cases resolved but unconfirmed for 72h are
--- closed by the system (BLUEPRINT: "no response in 72h → closed, actor system")
--- ---------------------------------------------------------------------------
+-- scheduled daily via pg_cron (0008)
 create or replace function public.fn_run_autoclose_sweep()
 returns integer
 language plpgsql volatile security definer

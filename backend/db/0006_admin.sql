@@ -1,12 +1,4 @@
--- ============================================================================
--- GamCiv AI — 0006_admin.sql
--- Admin route override + Central Desk queue
--- ============================================================================
-
--- ---------------------------------------------------------------------------
--- ADMIN: manual route override (POST /admin/cases/:id/route)
--- Admin only. Sets institution/department explicitly, marks status received.
--- ---------------------------------------------------------------------------
+-- 0006_admin.sql — admin route override + Central Desk queue
 create or replace function public.fn_admin_route(
   p_complaint_id uuid,
   p_institution_id uuid,
@@ -32,7 +24,7 @@ begin
     select 1 from public.departments d
     where d.id = p_department_id and d.institution_id = p_institution_id
   ) then
-    return false;  -- department does not belong to institution
+    return false;
   end if;
 
   update public.complaints
@@ -54,11 +46,6 @@ begin
   return true;
 end $$;
 
--- ---------------------------------------------------------------------------
--- CENTRAL DESK QUEUE: cases needing human triage.
--- BLUEPRINT §6: Central Desk handles unmatched / low-confidence plus the
--- sensitive intake queue. Returns the case list for the admin dashboard.
--- ---------------------------------------------------------------------------
 create or replace function public.fn_central_desk_queue()
 returns table (
   id uuid,
@@ -78,6 +65,6 @@ as $$
          c.ai_confidence, i.name, c.created_at
   from public.complaints c
   left join public.institutions i on i.id = c.institution_id
-  where c.status = 'submitted'  -- never routed / awaiting human triage
+  where c.status = 'submitted'
   order by c.urgency = 'critical' desc, c.created_at asc;
 $$;

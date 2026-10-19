@@ -1,5 +1,4 @@
 -- 0010d_notify.sql — claim/result functions for the notify-out edge function.
--- Matches docs/sql-contract.md and functions/notify-out/index.ts (ClaimRow).
 
 CREATE OR REPLACE FUNCTION public.notify_out_claim(p_notification_id text)
 RETURNS jsonb
@@ -60,7 +59,6 @@ BEGIN
 END;
 $$;
 
--- Queued: pending notifications for the edge worker to pick up
 CREATE OR REPLACE VIEW public.pending_notifications AS
 SELECT id::text AS notification_id, channel::text AS channel,
        recipient, message, attempts, created_at
