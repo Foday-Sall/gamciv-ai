@@ -11,6 +11,7 @@
  *  - Hard failures return 500 so GOWA retries; re-submission is idempotent via
  *    external_id dedupe in the SQL function.
  */
+import { sendOrFallback } from "../_shared/channelBridge.ts";
 import { FetchAiClient, loadAiConfig } from "../_shared/aiClient.ts";
 import { loadAppConfig } from "../_shared/config.ts";
 import {
@@ -105,13 +106,17 @@ export async function handleRequest(
   // First-contact greeting with no report content: onboard instead of filing.
   if (looksLikeGreeting(msg.body)) {
     try {
-      await deps.gowa.sendMessage(
+      await sendOrFallback(
+        Deno.env,
+        "whatsapp",
         msg.phone ?? "",
         onboardingText(msg.name),
+        () =>
+          deps.gowa.sendMessage(msg.phone ?? "", onboardingText(msg.name)).then(() => undefined),
       );
       return jsonResponse({ status: "sent_onboarding" });
     } catch (e) {
-      console.error("gowa onboarding send failed:", e);
+      console.error("onboarding send failed:", e);
       return jsonResponse({ status: "sent_onboarding", note: "send failed" });
     }
   }
@@ -188,13 +193,21 @@ export async function processReport(
     args,
   );
 
-  // 3) Confirmation via GOWA — must not fail the intake.
+  // 3) Confirmation — CHANNELS_URL set routes it through the Go channels
+  //    service (picoclaw bus); unset sends directly via GOWA. Must not fail
+  //    the intake either way.
   try {
     if (msg.phone) {
-      await deps.gowa.sendMessage(msg.phone, confirmationText(result));
+      await sendOrFallback(
+        Deno.env,
+        "whatsapp",
+        msg.phone,
+        confirmationText(result),
+        () => deps.gowa.sendMessage(msg.phone!, confirmationText(result)).then(() => undefined),
+      );
     }
   } catch (e) {
-    console.error("gowa confirmation send failed:", e);
+    console.error("confirmation send failed:", e);
   }
 
   return {

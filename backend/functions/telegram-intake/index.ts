@@ -16,6 +16,7 @@
  *  - p_channel falls back to "web" until the DB enum report_channel gains a
  *    "telegram" value (see README and docs/sql-contract.md note).
  */
+import { sendOrFallback } from "../_shared/channelBridge.ts";
 import { FetchAiClient, loadAiConfig } from "../_shared/aiClient.ts";
 import { loadAppConfig } from "../_shared/config.ts";
 import { errorResponse, jsonResponse, timingSafeEqualStr } from "../_shared/http.ts";
@@ -188,9 +189,17 @@ export async function processReport(
     args,
   );
 
-  // 4) Confirmation via the Telegram Bot API — must not fail the intake.
+  // 4) Confirmation — CHANNELS_URL set routes it through the Go channels
+  //    service (picoclaw bus); unset sends directly via the Telegram Bot API.
+  //    Must not fail the intake either way.
   try {
-    await deps.telegram.sendMessage(report.chatId, confirmationText(result));
+    await sendOrFallback(
+      Deno.env,
+      "telegram",
+      report.chatId,
+      confirmationText(result),
+      () => deps.telegram.sendMessage(report.chatId, confirmationText(result)).then(() => undefined),
+    );
   } catch (e) {
     console.error("telegram confirmation send failed:", e);
   }

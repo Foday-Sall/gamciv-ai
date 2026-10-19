@@ -9,6 +9,7 @@
  * Auth: shared secret via x-gamciv-key header (stored in the DB Vault, passed
  * by pg_net). Optional GOWA_DEVICE_ID when more than one device is linked.
  */
+import { sendOrFallback } from "../_shared/channelBridge.ts";
 import { FetchGowaClient, type GowaClient } from "../_shared/gowaClient.ts";
 import { jsonResponse, readJson, timingSafeEqualStr } from "../_shared/http.ts";
 import { PostgrestRpcClient, type RpcClient } from "../_shared/rpcClient.ts";
@@ -122,20 +123,49 @@ async function sendWhatsapp(deps: NotifyOutDeps, claim: ClaimRow): Promise<Respo
   if (!claim.recipient || !claim.message) {
     return recordAndRespond(deps.rpc, claim, "missing recipient or message");
   }
-  const ref = await deps.gowa.sendMessage(claim.recipient, claim.message);
-  const ok = ref.status === "sent";
+  // CHANNELS_URL set: route through the Go channels service (picoclaw bus,
+  // which applies splitting/retries and hands off to its whatsapp channel);
+  // unset: direct GOWA send (backward compatible default).
+  // Boxed so TypeScript doesn't narrow the outer variable to `never` after
+  // assignment inside the async closure (TS2339 on directResult?.status).
+  const direct = { result: null as { messageId?: string; status?: string } | null };
+  const outcome = await sendOrFallback(
+    Deno.env,
+    "whatsapp",
+    claim.recipient,
+    claim.message,
+    async () => {
+      const sent = await deps.gowa.sendMessage(claim.recipient!, claim.message!);
+      direct.result = sent;
+    },
+  );
+  if (outcome.status === "queued") {
+    // Accepted for delivery; splitting/retries are the Go manager's job.
+    await deps.rpc.call<Record<string, unknown>, boolean>("notify_out_result", {
+      p_notification_id: claim.notification_id,
+      p_status: "sent",
+      p_provider_ref: null,
+      p_error: null,
+    });
+    return jsonResponse({ status: "sent", channel: "whatsapp", provider_ref: null });
+  }
+  const ok = direct.result?.status === "sent";
   await deps.rpc.call<Record<string, unknown>, boolean>("notify_out_result", {
     p_notification_id: claim.notification_id,
     p_status: ok ? "sent" : "failed",
-    p_provider_ref: ok ? (ref.messageId ?? null) : null,
-    p_error: ok ? null : `gowa status ${ref.status ?? "unknown"}`,
+    p_provider_ref: ok ? (direct.result?.messageId ?? null) : null,
+    p_error: ok ? null : `gowa status ${direct.result?.status ?? "unknown"}`,
   });
   return ok
-    ? jsonResponse({ status: "sent", channel: "whatsapp", provider_ref: ref.messageId ?? null })
+    ? jsonResponse({
+      status: "sent",
+      channel: "whatsapp",
+      provider_ref: direct.result?.messageId ?? null,
+    })
     : jsonResponse({
       status: "failed",
       channel: "whatsapp",
-      reason: `gowa status ${ref.status ?? "unknown"}`,
+      reason: `gowa status ${direct.result?.status ?? "unknown"}`,
     });
 }
 
