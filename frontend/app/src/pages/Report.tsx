@@ -141,6 +141,24 @@ export default function Report() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [discardOpen, setDiscardOpen] = useState(false)
 
+  // Start a completely fresh report: clears the wizard and its media preview.
+  function startFresh() {
+    setStep(0)
+    setInstId(null)
+    setCatId(null)
+    setTitle('')
+    setDescription('')
+    setUrgency('normal')
+    setPhotoFile(null)
+    setPhotoPreview(null)
+    setLocation(EMPTY_LOCATION)
+    setResult(null)
+    setCopied(false)
+    setConfirmOpen(false)
+    setDiscardOpen(false)
+    sentExternalIdRef.current = null
+  }
+
   // A report is "dirty" once the user has entered anything worth keeping.
   const isDirty =
     step > 0 &&
@@ -311,6 +329,7 @@ export default function Report() {
       toast.error("You're offline. Reconnect and try again — your report isn't sent yet.")
       return
     }
+    setConfirmOpen(false)
     setSubmitting(true)
     try {
       // Idempotency key: one per fill-out of the form. If the request is lost
@@ -857,14 +876,14 @@ export default function Report() {
               Your report goes to {result.institution_name}. Keep this tracking number:
             </p>
             <div className="mt-6 rounded-xl bg-gold-tint p-4">
-              <p className="font-display text-[28px] font-bold leading-tight tracking-wide text-gold-deep tabular">
+              <p className="font-display text-2xl font-bold leading-tight tracking-wide text-gold-deep tabular sm:text-[28px]">
                 {result.tracking_no}
               </p>
               <p className="mt-1 text-xs text-gold-ink">
                 Write it down or screenshot it — you will need it to follow your report.
               </p>
             </div>
-            <div className="mt-4 flex justify-center gap-2">
+            <div className="mt-4 flex flex-col justify-center gap-2 sm:flex-row">
               <Button variant="outline" className="h-11" onClick={copyTracking}>
                 {copied ? <Check /> : <Copy />}
                 {copied ? 'Copied' : 'Copy'}
@@ -874,9 +893,13 @@ export default function Report() {
               </Button>
             </div>
             <p className="mt-6">
-              <Link to="/report" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+              <button
+                type="button"
+                onClick={startFresh}
+                className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              >
                 File another report
-              </Link>
+              </button>
             </p>
           </motion.section>
         )}
