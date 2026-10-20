@@ -2,7 +2,7 @@
  * GOWA client: read the inbound webhook (with HMAC verification) and send
  * messages via the GOWA REST API (go-whatsapp-web-multidevice v9.6, plain fetch).
  */
-import { timingSafeEqualStr } from "./http.ts";
+import { fetchWithRetry, timingSafeEqualStr } from "./http.ts";
 import type { GowaEnvelope, GowaMessagePayload } from "./types.ts";
 
 export interface GowaSendConfig {
@@ -37,7 +37,8 @@ export class FetchGowaClient implements GowaClient {
     if (this.config.deviceId) {
       headers["X-Device-Id"] = this.config.deviceId;
     }
-    const res = await this.fetchImpl(
+    const res = await fetchWithRetry(
+      this.fetchImpl,
       `${this.config.baseUrl.replace(/\/+$/, "")}/send/message`,
       {
         method: "POST",

@@ -55,3 +55,32 @@ export function timingSafeEqualStr(a: string, b: string): boolean {
   }
   return diff === 0;
 }
+
+/**
+ * True when a fetch failed at the network level (connection error, timeout
+ * abort). These are transient and warrant one retry; HTTP error statuses are
+ * real responses and must not trigger a retry.
+ */
+export function isNetworkError(e: unknown): boolean {
+  if (e instanceof TypeError) return true;
+  const name = e instanceof DOMException || e instanceof Error ? e.name : "";
+  return name === "AbortError" || name === "TimeoutError";
+}
+
+/**
+ * Fetch with a hard 15s timeout and one retry on network-level failures with
+ * a fresh timeout. Guards the edge functions against the intermittently
+ * hanging outbound fetch (the runtime only wall-clock-kills at ~25s).
+ */
+export async function fetchWithRetry(
+  f: typeof fetch,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  try {
+    return await f(url, { ...init, signal: AbortSignal.timeout(15_000) });
+  } catch (e) {
+    if (!isNetworkError(e)) throw e;
+    return await f(url, { ...init, signal: AbortSignal.timeout(15_000) });
+  }
+}

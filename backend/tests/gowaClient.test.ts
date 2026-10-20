@@ -1,13 +1,123 @@
-/** Unit tests for the GOWA webhook parsing and signature verification. */
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+/** Unit tests for the GOWA webhook parsing, signature verification, and the
+ * timeout/retry wrapper used by all outbound fetches. */
+import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   extractMessage,
+  FetchGowaClient,
+  GowaError,
   normalizePhone,
   parseGowaEnvelope,
   verifyGowaSignature,
 } from "../functions/_shared/gowaClient.ts";
+import { fetchWithRetry, isNetworkError } from "../functions/_shared/http.ts";
 
 const SECRET = "test-secret";
+
+// ---- fetchWithRetry: timeout + one retry on network errors ----
+
+function networkFailThenReturn(
+  responses: Array<Response | Error>,
+): { fetchImpl: typeof fetch; calls: () => number } {
+  let calls = 0;
+  return {
+    calls: () => calls,
+    fetchImpl: ((_url: string | URL | Request, _init?: RequestInit) => {
+      const r = responses[calls];
+      calls++;
+      if (r instanceof Error) return Promise.reject(r);
+      return Promise.resolve(r);
+    }) as typeof fetch,
+  };
+}
+
+const ok200 = () => new Response("{}", { status: 200 });
+
+Deno.test("fetchWithRetry retries once on timeout (AbortError) then succeeds", async () => {
+  const abort = new DOMException("The operation was aborted.", "AbortError");
+  const { fetchImpl, calls } = networkFailThenReturn([abort, ok200()]);
+  const res = await fetchWithRetry(fetchImpl, "http://x/y", { method: "GET" });
+  assertEquals(res.status, 200);
+  assertEquals(calls(), 2); // exactly one retry
+});
+
+Deno.test("fetchWithRetry retries once on TypeError (network failure) then succeeds", async () => {
+  const { fetchImpl, calls } = networkFailThenReturn([
+    new TypeError("fetch failed"),
+    ok200(),
+  ]);
+  const res = await fetchWithRetry(fetchImpl, "http://x/y", { method: "GET" });
+  assertEquals(res.status, 200);
+  assertEquals(calls(), 2);
+});
+
+Deno.test("fetchWithRetry propagates the error when the retry also fails", async () => {
+  const abort = new DOMException("aborted", "AbortError");
+  const { fetchImpl, calls } = networkFailThenReturn([abort, abort]);
+  await assertRejects(() => fetchWithRetry(fetchImpl, "http://x/y", {}));
+  assertEquals(calls(), 2); // no second retry
+});
+
+Deno.test("fetchWithRetry does NOT retry on HTTP error statuses", async () => {
+  const { fetchImpl, calls } = networkFailThenReturn([
+    new Response("nope", { status: 502 }),
+  ]);
+  const res = await fetchWithRetry(fetchImpl, "http://x/y", {});
+  assertEquals(res.status, 502);
+  assertEquals(calls(), 1); // error status is a real response, returned as-is
+});
+
+Deno.test("fetchWithRetry does not retry on non-network errors", async () => {
+  const { fetchImpl, calls } = networkFailThenReturn([new RangeError("bad")]);
+  await assertRejects(
+    () => fetchWithRetry(fetchImpl, "http://x/y", {}),
+    RangeError,
+  );
+  assertEquals(calls(), 1);
+});
+
+Deno.test("isNetworkError covers abort/timeout/typeerror only", () => {
+  assertEquals(isNetworkError(new TypeError("fetch failed")), true);
+  assertEquals(isNetworkError(new DOMException("abort", "AbortError")), true);
+  assertEquals(isNetworkError(new DOMException("t/o", "TimeoutError")), true);
+  assertEquals(isNetworkError(new GowaError("gowa send HTTP 500")), false);
+  assertEquals(isNetworkError(null), false);
+});
+
+Deno.test("FetchGowaClient sendMessage succeeds after a timed-out first attempt", async () => {
+  const abort = new DOMException("aborted", "AbortError");
+  let calls = 0;
+  const client = new FetchGowaClient(
+    { baseUrl: "http://gowa:3000", basicAuth: "u:p" },
+    ((_url, init) => {
+      calls++;
+      // prove a fresh timeout signal is attached on each attempt
+      assertEquals(init?.signal instanceof AbortSignal, true);
+      if (calls === 1) return Promise.reject(abort);
+      return Promise.resolve(
+        new Response(JSON.stringify({ message_id: "M1", status: "sent" }), {
+          status: 200,
+        }),
+      );
+    }) as typeof fetch,
+  );
+  const out = await client.sendMessage("2207123456", "hello");
+  assertEquals(out.messageId, "M1");
+  assertEquals(out.status, "sent");
+  assertEquals(calls, 2);
+});
+
+Deno.test("FetchGowaClient HTTP error status is thrown without retry", async () => {
+  let calls = 0;
+  const client = new FetchGowaClient(
+    { baseUrl: "http://gowa:3000", basicAuth: "u:p" },
+    (() => {
+      calls++;
+      return Promise.resolve(new Response("bad gateway", { status: 502 }));
+    }) as typeof fetch,
+  );
+  await assertRejects(() => client.sendMessage("2207123456", "hello"), GowaError);
+  assertEquals(calls, 1);
+});
 
 async function sign(body: string): Promise<string> {
   const key = await crypto.subtle.importKey(

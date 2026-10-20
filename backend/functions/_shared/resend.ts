@@ -6,6 +6,8 @@
  * welcome, citizen lifecycle). Institute correspondence never passes
  * through this server and is never stored here.
  */
+import { fetchWithRetry } from "./http.ts";
+
 export interface ResendSendConfig {
   apiKey: string;
   /** From address, e.g. "GamCiv <onboarding@resend.dev>" (from app_settings). */
@@ -33,7 +35,7 @@ export class FetchResendClient implements ResendClient {
     opts: { to: string; subject: string; html: string; text: string; from?: string },
   ): Promise<{ ok: true; id: string | null } | { ok: false; error: string }> {
     try {
-      const res = await this.fetchImpl("https://api.resend.com/emails", {
+      const res = await fetchWithRetry(this.fetchImpl, "https://api.resend.com/emails", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -84,7 +86,8 @@ export async function logSystemEmail(
   row: EmailLogRow,
 ): Promise<boolean> {
   try {
-    const res = await (deps.fetchImpl ?? fetch)(
+    const res = await fetchWithRetry(
+      deps.fetchImpl ?? fetch,
       `${deps.postgrestUrl.replace(/\/+$/, "")}/rest/v1/email_log`,
       {
         method: "POST",

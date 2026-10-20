@@ -2,6 +2,8 @@
  * Minimal typed PostgREST RPC client (plain fetch, service_role by default).
  * Edge functions make exactly one RPC call each; all business logic is SQL.
  */
+import { fetchWithRetry } from "./http.ts";
+
 export class RpcError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
@@ -33,7 +35,7 @@ export class PostgrestRpcClient implements RpcClient {
 
   async call<TArgs, TResult>(fnName: string, args: TArgs): Promise<TResult> {
     const url = `${this.baseUrl}/rest/v1/rpc/${fnName}`;
-    const res = await this.fetchImpl(url, {
+    const res = await fetchWithRetry(this.fetchImpl, url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
