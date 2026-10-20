@@ -2,7 +2,7 @@
 
 The UI pipeline is automatic. Open a pull request to `main` to run checks without deploying. When a change is pushed to `main`, GitHub Actions runs CI first; only a successful CI run starts the VPS deployment.
 
-CI lints the citizen app, builds the citizen app, admin dashboard, and landing site, then opens all three built frontends in Chromium at desktop and mobile sizes. The smoke tests verify that login, signup, the landing page, and dashboard login render; their JavaScript and CSS load; and the pages do not crash. The deploy workflow repeats the browser smoke test using the production build and checks Nginx routes and assets after upload.
+CI lints the citizen app, builds the citizen app, admin dashboard, and landing site, then opens all three built frontends in Chromium at desktop and mobile sizes. The smoke tests cover login, signup, the email-first password reset and recovery-code screens, the landing page, and dashboard login. A mocked recovery test verifies the 6-digit OTP is submitted as a recovery token before the new-password form appears. The tests also check JavaScript/CSS loading and browser runtime errors. The deploy workflow repeats browser smoke checks using the production build and checks Nginx routes and assets after upload.
 
 ## Required GitHub Actions secrets
 

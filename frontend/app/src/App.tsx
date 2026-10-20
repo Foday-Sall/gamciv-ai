@@ -4,6 +4,8 @@ import AppShell from '@/components/AppShell'
 import { useIsDesktop } from '@/hooks/useIsDesktop'
 import HomeGate from '@/pages/HomeGate'
 import Auth from '@/pages/Auth'
+import ForgotPassword from '@/pages/ForgotPassword'
+import ResetPassword from '@/pages/ResetPassword'
 import Report from '@/pages/Report'
 import Track from '@/pages/Track'
 import Profile from '@/pages/Profile'
@@ -23,6 +25,10 @@ export default function App() {
     <>
       <PositionedToaster />
       <Routes>
+        {/* Password recovery uses a separate email request and recovery OTP flow. */}
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+
         {/* Verification screens: OTP entry, reachable with or without a session */}
         <Route path="/verify/email" element={<VerifyEmail />} />
         <Route path="/verify/phone" element={<VerifyPhone />} />
