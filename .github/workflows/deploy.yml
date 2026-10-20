@@ -1,12 +1,16 @@
-# Deploys the site to the VPS on every push to main.
-# Requires repo secrets: DEPLOY_SSH_KEY (private key), VPS_HOST (user@host)
-# Set once via: gh secret set DEPLOY_SSH_KEY < keyfile   /   gh secret set VPS_HOST
+# Production deployment runs only after the CI workflow succeeds on a push to main.
+# Required repository Actions secrets: DEPLOY_SSH_KEY, VPS_HOST, VPS_HOST_ADDR.
 name: Deploy
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: deploy-production
@@ -14,13 +18,23 @@ concurrency:
 
 jobs:
   deploy:
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push' &&
+         github.event.workflow_run.head_branch == 'main')
+      }}
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: |
             frontend/app/package-lock.json
@@ -28,66 +42,110 @@ jobs:
             frontend/landing/package-lock.json
 
       - name: Set up SSH
-        run: |
-          install -m 600 /dev/null /tmp/deploy_key
-          echo "$DEPLOY_SSH_KEY" > /tmp/deploy_key
-          mkdir -p ~/.ssh && touch ~/.ssh/known_hosts
-          ssh-keyscan -H "$VPS_HOST_ADDR" >> ~/.ssh/known_hosts 2>/dev/null
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           VPS_HOST_ADDR: ${{ secrets.VPS_HOST_ADDR }}
-
-      - name: Build frontends with VPS Supabase configuration
         run: |
           set -eu
-          export SSH="ssh -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key $VPS_HOST"
+          test -n "$DEPLOY_SSH_KEY"
+          test -n "$VPS_HOST_ADDR"
+          install -m 600 /dev/null /tmp/deploy_key
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > /tmp/deploy_key
+          mkdir -p ~/.ssh
+          touch ~/.ssh/known_hosts
+          ssh-keyscan -H "$VPS_HOST_ADDR" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Build production frontends with VPS Supabase settings
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          set -euo pipefail
+          umask 022
+          test -n "$VPS_HOST"
+          SSH="ssh -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key $VPS_HOST"
           SUPABASE_URL=$($SSH 'sed -n "s/^SUPABASE_PUBLIC_URL=//p" /opt/supabase/docker/.env | head -1' | tr -d '"\r')
           ANON_KEY=$($SSH 'sed -n "s/^ANON_KEY=//p" /opt/supabase/docker/.env | head -1' | tr -d '"\r')
           test -n "$SUPABASE_URL"
           test -n "$ANON_KEY"
           export VITE_SUPABASE_URL="$SUPABASE_URL"
           export VITE_SUPABASE_ANON_KEY="$ANON_KEY"
-          for d in frontend/app frontend/dashboard/admin frontend/landing; do
-            echo "== building $d"
-            (cd "$d" && npm ci && npm run build)
+          for dir in frontend/app frontend/dashboard/admin frontend/landing; do
+            echo "Building $dir"
+            (cd "$dir" && npm ci && npm run build)
           done
           unset VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY SUPABASE_URL ANON_KEY
-        env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-
-      - name: Deploy to VPS
-        run: |
-          set -e
-          export SSH="ssh -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key $VPS_HOST"
-          export SCP="scp -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key"
-          # database migrations: run every listed migration that exists in the
-          # checkout (migrations from other in-flight workstreams are skipped
-          # until their owners commit them; idempotent SQL makes re-runs safe)
-          for M in backend/db/0015_institution_dashboard.sql backend/db/0016_dispatch.sql backend/db/0017_profile_avatar.sql backend/db/0017_whatsapp_numbers.sql; do
-            if [ ! -f "$M" ]; then
-              echo "skip $M (not in this commit)"
-              continue
-            fi
-            N=$(basename "$M")
-            $SCP "$M" "$VPS_HOST:/tmp/$N"
-            $SSH "docker cp /tmp/$N supabase-db:/tmp/$N && docker exec -i supabase-db psql -U supabase_admin -d postgres -f /tmp/$N && rm -f /tmp/$N"
+          for dir in frontend/app/dist frontend/dashboard/admin/dist frontend/landing/dist; do
+            test -d "$dir"
+            find "$dir" -type d -exec chmod 755 {} +
+            find "$dir" -type f -exec chmod 644 {} +
           done
-          # frontends: the nginx image bakes HTML at /usr/share/nginx/html — copy into
-          # the running container and reload (the /opt/* staging dirs are scratch)
-          $SSH "mkdir -p /opt/gamciv-app/html /opt/gamciv-dashboard/html /opt/gamciv-landing/html"
-          $SCP -r frontend/app/dist/. "$VPS_HOST:/opt/gamciv-app/html/"
-          $SCP -r frontend/dashboard/admin/dist/. "$VPS_HOST:/opt/gamciv-dashboard/html/"
-          $SCP -r frontend/landing/dist/. "$VPS_HOST:/opt/gamciv-landing/html/"
-          # nginx vhost config: baked into the image at /etc/nginx/conf.d —
-          # copy the repo version into the running container before the reload
-          # (single vhost: gamciv serves landing, /app and the /dashboard
-          # app; dashboard.pocketsoftware.dev is retired)
-          $SCP deploy/nginx/default.conf "$VPS_HOST:/opt/gamciv-nginx-default.conf"
-          $SSH "docker cp /opt/gamciv-nginx-default.conf gamciv-landing:/etc/nginx/conf.d/default.conf && docker cp /opt/gamciv-app/html/. gamciv-landing:/usr/share/nginx/html/app/ && docker cp /opt/gamciv-dashboard/html/. gamciv-landing:/usr/share/nginx/html/dashboard/ && docker cp /opt/gamciv-landing/html/. gamciv-landing:/usr/share/nginx/html/ && docker exec gamciv-landing nginx -s reload"
-          # backend functions: rsync to the supabase functions volume and restart
-          $SSH "mkdir -p /opt/supabase/docker/volumes/functions"
-          $SCP -r backend/functions/. "$VPS_HOST:/opt/supabase/docker/volumes/functions/"
-          $SSH "cd /opt/supabase/docker && docker compose restart functions"
+
+      - name: Smoke-test production-configured build before upload
+        working-directory: frontend/app
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+
+      - name: Deploy to VPS, validate Nginx, and verify served routes/assets
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          set -euo pipefail
+          SSH_OPTS=(-o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key)
+          ssh_cmd() { ssh "${SSH_OPTS[@]}" "$VPS_HOST" "$@"; }
+          scp_cmd() { scp "${SSH_OPTS[@]}" "$@"; }
+          test -n "$VPS_HOST"
+
+          # Keep the existing idempotent database migration deployment behavior.
+          for migration in backend/db/0015_institution_dashboard.sql backend/db/0016_dispatch.sql backend/db/0017_profile_avatar.sql backend/db/0017_whatsapp_numbers.sql; do
+            if [ -f "$migration" ]; then
+              name=$(basename "$migration")
+              scp_cmd "$migration" "$VPS_HOST:/tmp/$name"
+              ssh_cmd "docker cp /tmp/$name supabase-db:/tmp/$name && docker exec -i supabase-db psql -U supabase_admin -d postgres -f /tmp/$name && rm -f /tmp/$name"
+            fi
+          done
+
+          ssh_cmd 'mkdir -p /opt/gamciv-app/html /opt/gamciv-dashboard/html /opt/gamciv-landing/html'
+          scp_cmd -r frontend/app/dist/. "$VPS_HOST:/opt/gamciv-app/html/"
+          scp_cmd -r frontend/dashboard/admin/dist/. "$VPS_HOST:/opt/gamciv-dashboard/html/"
+          scp_cmd -r frontend/landing/dist/. "$VPS_HOST:/opt/gamciv-landing/html/"
+          scp_cmd deploy/nginx/default.conf "$VPS_HOST:/opt/gamciv-nginx-default.conf"
+
+          ssh -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key "$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -eu
+          docker cp /opt/gamciv-nginx-default.conf gamciv-landing:/etc/nginx/conf.d/default.conf
+          docker cp /opt/gamciv-app/html/. gamciv-landing:/usr/share/nginx/html/app/
+          docker cp /opt/gamciv-dashboard/html/. gamciv-landing:/usr/share/nginx/html/dashboard/
+          docker cp /opt/gamciv-landing/html/. gamciv-landing:/usr/share/nginx/html/
+          docker exec gamciv-landing sh -c 'find /usr/share/nginx/html -type d -exec chmod 755 {} + && find /usr/share/nginx/html -type f -exec chmod 644 {} +'
+          docker exec gamciv-landing nginx -t
+          docker exec gamciv-landing nginx -s reload
+
+          check_route() {
+            route="$1"
+            html=$(curl -fsS "http://127.0.0.1:8095$route")
+            js=$(printf '%s' "$html" | grep -Eo 'src="[^"]+\.js"' | head -1 | cut -d '"' -f 2)
+            css=$(printf '%s' "$html" | grep -Eo 'href="[^"]+\.css"' | head -1 | cut -d '"' -f 2 || true)
+            test -n "$js"
+            curl -fsS -o /dev/null "http://127.0.0.1:8095$js"
+            if [ -n "$css" ]; then
+              curl -fsS -o /dev/null "http://127.0.0.1:8095$css"
+            fi
+            printf 'Nginx route and assets OK: %s\n' "$route"
+          }
+          check_route /app/login
+          check_route /app/signup
+          check_route /dashboard/
+          check_route /
+          REMOTE
+
+          # Keep the existing backend function deployment behavior after UI checks pass.
+          ssh_cmd 'mkdir -p /opt/supabase/docker/volumes/functions'
+          scp_cmd -r backend/functions/. "$VPS_HOST:/opt/supabase/docker/volumes/functions/"
+          ssh_cmd 'cd /opt/supabase/docker && docker compose restart functions'
+
+      - name: Verify deployed login and signup in a real browser
+        working-directory: frontend/app
+        env:
+          BASE_URL: https://gamciv.pocketsoftware.dev
+        run: npm run test:e2e

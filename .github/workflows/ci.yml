@@ -6,41 +6,81 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-
-      - name: Lint backend (deno lint)
+      - name: Lint backend
         working-directory: backend
         run: deno lint
-
-      - name: Test backend (deno test)
+      - name: Test backend
         working-directory: backend
         run: deno test --allow-all
 
   frontend:
+    name: UI lint, build, and browser smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Public placeholders are used only in CI builds. Production builds read
+      # the real public Supabase settings from the VPS during the deploy job.
+      VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+      VITE_SUPABASE_ANON_KEY: ci-only-placeholder-anon-key
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            frontend/app/package-lock.json
+            frontend/dashboard/admin/package-lock.json
+            frontend/landing/package-lock.json
 
-      - name: Build landing (vite)
+      - name: Install, lint, and build citizen app
+        working-directory: frontend/app
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Build admin dashboard
+        working-directory: frontend/dashboard/admin
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build landing site
         working-directory: frontend/landing
         run: |
           npm ci
           npm run build
 
-      - name: Build admin dashboard (vite)
-        working-directory: frontend/dashboard/admin
+      - name: Normalize static web permissions
         run: |
-          npm ci
-          npm run build
+          set -eu
+          for dir in frontend/app/dist frontend/dashboard/admin/dist frontend/landing/dist; do
+            test -d "$dir"
+            find "$dir" -type d -exec chmod 755 {} +
+            find "$dir" -type f -exec chmod 644 {} +
+          done
+
+      - name: Install Chromium for browser smoke tests
+        working-directory: frontend/app
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify login and signup render with working JS/CSS
+        working-directory: frontend/app
+        run: npm run test:e2e
