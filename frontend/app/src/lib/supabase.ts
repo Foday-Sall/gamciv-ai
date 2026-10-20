@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import type { User } from '@supabase/supabase-js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -22,6 +23,11 @@ export const supabase = createClient(url, anonKey, {
  */
 export const STAFF_DASHBOARD_URL = 'https://gamciv.pocketsoftware.dev/dash'
 export const OFFICER_DASHBOARD_URL = STAFF_DASHBOARD_URL
+
+/** Google verifies the account email; Google-authenticated citizens do not need WhatsApp phone OTP. */
+export function isGoogleAuthUser(user: Pick<User, 'app_metadata'> | null | undefined): boolean {
+  return user?.app_metadata?.provider === 'google'
+}
 
 /**
  * The profiles table is keyed by `user_id`; routing reads only the fields

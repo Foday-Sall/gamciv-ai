@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getProfile, supabase } from '@/lib/supabase'
+import { getProfile, isGoogleAuthUser, supabase } from '@/lib/supabase'
 
 const OTP_LENGTH = 6
 
@@ -96,6 +96,10 @@ export default function VerifyPhone() {
       const { data } = await supabase.auth.getSession()
       if (!data.session) {
         navigate('/login', { replace: true })
+        return
+      }
+      if (isGoogleAuthUser(data.session.user)) {
+        navigate('/home', { replace: true })
         return
       }
       const profile = await getProfile(data.session.user.id)

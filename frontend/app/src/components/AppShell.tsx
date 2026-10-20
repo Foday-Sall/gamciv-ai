@@ -35,7 +35,7 @@ import {
 import { SignOutDialog } from '@/components/ConfirmDialogs'
 import PageTransition from '@/components/PageTransition'
 import { useSession, useDisplayName } from '@/hooks/useSession'
-import { supabase, getProfile, STAFF_DASHBOARD_URL } from '@/lib/supabase'
+import { supabase, getProfile, isGoogleAuthUser, STAFF_DASHBOARD_URL } from '@/lib/supabase'
 import GamCivMark from '@/components/GamCivMark'
 import { toast } from 'sonner'
 
@@ -66,6 +66,7 @@ export default function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const { session, loading: sessionLoading } = useSession()
+  const isGoogleUser = isGoogleAuthUser(session?.user)
   const name = useDisplayName(session)
   const [scrolled, setScrolled] = useState(false)
   const [signOutOpen, setSignOutOpen] = useState(false)
@@ -84,8 +85,9 @@ export default function AppShell() {
       ? gateResult.userId === session.user.id ? gateResult.status : 'checking'
       : 'ready'
 
-  // A persistent auth session is not proof that a citizen completed phone OTP.
-  // Check the server profile on every shell entry, including a browser refresh.
+  // Email/password citizens must complete WhatsApp phone OTP. Google has
+  // already verified the account email and is deliberately exempt from phone OTP.
+  // Check the profile on each shell entry, including a browser refresh.
   useEffect(() => {
     if (sessionLoading || !session?.user?.id) return
     let cancelled = false
@@ -96,7 +98,11 @@ export default function AppShell() {
         setGateResult({ userId, status: 'unavailable' })
         return
       }
-      if (profile.role === 'citizen' && profile.phone_verified !== true) {
+      if (
+        profile.role === 'citizen' &&
+        !isGoogleUser &&
+        profile.phone_verified !== true
+      ) {
         setGateResult({ userId, status: 'needs-phone' })
         navigate('/verify/phone', { replace: true })
         return
@@ -108,7 +114,7 @@ export default function AppShell() {
     return () => {
       cancelled = true
     }
-  }, [session?.user?.id, sessionLoading, gateRetry, navigate])
+  }, [session?.user?.id, isGoogleUser, sessionLoading, gateRetry, navigate])
 
   // A signed-in staff member or the owner is routed by the server-side
   // allowlist to the same /dash entry; transient API errors do not redirect.
