@@ -776,6 +776,12 @@ Deno.test("normalizePhoneOtp: accepts the formats users send", () => {
   assertEquals(normalizePhoneOtp("12345"), null); // too short
 });
 
+Deno.test("normalizePhoneOtp: completes bare local numbers with 220", () => {
+  assertEquals(normalizePhoneOtp("3552116"), "2203552116");
+  assertEquals(normalizePhoneOtp("03552116"), "2203552116");
+  assertEquals(normalizePhoneOtp("220 355 2116"), "2203552116");
+});
+
 Deno.test("categoryLabel: slug to human label", () => {
   assertEquals(categoryLabel("water_supply"), "water supply");
   assertEquals(categoryLabel(null), "report");

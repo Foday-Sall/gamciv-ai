@@ -393,7 +393,17 @@ export async function handleSendPhoneOtp(
   });
   try {
     await deps.gowa.sendMessage(phone, whatsappOtpMessage(code, settings.whatsapp_sender_number));
-  } catch {
+  } catch (e) {
+    // Distinguish an unroutable/invalid number from a generic delivery
+    // failure, so the UI can tell the person what to fix (e.g. GOWA's
+    // "no LID found for 3552116@..." means the number is incomplete).
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/no lid|not valid|invalid|gowa send http 400/i.test(msg)) {
+      return errorResponse(
+        400,
+        "Please enter your full phone number with country code, e.g. 220XXXXXXX",
+      );
+    }
     return errorResponse(502, "WhatsApp delivery failed. Try again in a few minutes.");
   }
   const hint = settings.whatsapp_sender_number

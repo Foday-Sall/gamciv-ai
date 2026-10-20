@@ -47,12 +47,16 @@ export function isValidEmail(email: string): boolean {
 
 /**
  * Normalize a phone to bare international digits (like gowaClient).
- * Accepts +220..., 00220..., spaces/dashes; requires 7-15 digits total.
+ * Accepts +220..., 00220..., spaces/dashes. Completes bare 7-digit local
+ * numbers with Gambia's country code (220) and strips the local "0" trunk
+ * prefix, so a user typing "3552116" or "03552116" gets "2203552116".
  */
 export function normalizePhoneOtp(raw: string): string | null {
   let digits = raw.replace(/[^\d]/g, "");
   if (digits.startsWith("00")) digits = digits.slice(2);
-  if (!/^\d{7,15}$/.test(digits)) return null;
+  if (/^0\d+$/.test(digits)) digits = digits.replace(/^0+/, "");
+  if (digits.length === 7) digits = `220${digits}`;
+  if (!/^220\d{7}$/.test(digits) && !/^\d{7,15}$/.test(digits)) return null;
   return digits;
 }
 

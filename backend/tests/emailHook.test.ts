@@ -18,6 +18,7 @@ const SECRET = "v1,whsec_zY8lj1MFwMZNgUwNqSzs88gK1XMuTa2zpHvB5VaFrs4=";
 interface SendRec {
   to: string;
   subject: string;
+  html: string;
 }
 
 interface LogRec {
@@ -32,7 +33,7 @@ function makeDeps(sends: SendRec[], logs: LogRec[]): EmailHookDeps {
     secret: SECRET,
     resend: {
       send: (o) => {
-        sends.push({ to: o.to, subject: o.subject });
+        sends.push({ to: o.to, subject: o.subject, html: o.html });
         return Promise.resolve({ ok: true, id: `id_${sends.length}` });
       },
     },
@@ -110,7 +111,7 @@ Deno.test("handleHookRequest: bad signature is rejected with 401 and no send", a
   assertEquals(logs.length, 0);
 });
 
-Deno.test("handleHookRequest: valid signature, signup sends verification + welcome and logs both", async () => {
+Deno.test("handleHookRequest: valid signature, signup sends ONE combined welcome+code email", async () => {
   const sends: SendRec[] = [];
   const logs: LogRec[] = [];
   const body = JSON.stringify({
@@ -120,14 +121,16 @@ Deno.test("handleHookRequest: valid signature, signup sends verification + welco
   const res = await handleHookRequest(signedRequest(body), makeDeps(sends, logs));
   assertEquals(res.status, 200);
   assertEquals(await res.json(), {});
-  assertEquals(sends.length, 2);
+  // Exactly one email: subject contains BOTH the welcome and the code.
+  assertEquals(sends.length, 1);
   assertEquals(sends[0].to, "citizen@example.com");
+  assertStringIncludes(sends[0].subject, "Welcome to GamCiv");
   assertStringIncludes(sends[0].subject, "654321");
-  assertEquals(sends[1].subject, "Welcome to GamCiv");
-  assertEquals(logs.length, 2);
+  assertStringIncludes(sends[0].html, "Welcome to GamCiv");
+  assertStringIncludes(sends[0].html, "654321");
+  assertEquals(logs.length, 1);
   assertEquals(logs[0].template, "email_verify");
   assertEquals(logs[0].status, "sent");
-  assertEquals(logs[1].template, "welcome");
 });
 
 Deno.test("handleHookRequest: non-signup action sends exactly one email", async () => {

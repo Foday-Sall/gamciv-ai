@@ -26,7 +26,6 @@
  */
 import { Webhook } from "npm:standardwebhooks@1.0.0";
 import { jsonResponse } from "../_shared/http.ts";
-import { buildEmailContent } from "../_shared/otp.ts";
 import {
   FetchResendClient,
   emailHtml,
@@ -127,13 +126,22 @@ export function renderHookEmail(
 ): { template: string; subject: string; html: string; text: string } {
   const t = templateFor(actionType);
   const code = token;
+  // Boss decision: signup gets ONE email that both welcomes and verifies —
+  // not a code email plus a separate welcome email.
+  const isSignup = actionType === "signup";
+  const lead = isSignup
+    ? `Welcome to GamCiv! Your account is ready — verify your email to finish signing up. Your code is <strong>${code}</strong>.`
+    : `${t.lead} Your code is <strong>${code}</strong>.`;
   const html = emailHtml(t.title, [
-    `${t.lead} Your code is <strong>${code}</strong>.`,
+    lead,
     "It expires in 15 minutes and can be used once.",
     `If you did not request this code, ignore this message. Sent to ${to}.`,
   ]);
-  const text = `${t.title}. ${t.lead.replace("Use this code", "Code")}: ${code}. It expires in 15 minutes and can be used once.`;
-  return { template: t.template, subject: `${t.subject} ${code}`, html, text };
+  const text = `${t.title}. ${isSignup ? "Welcome to GamCiv! Verify your email to finish signing up." : t.lead.replace("Use this code", "Code")} Code: ${code}. It expires in 15 minutes and can be used once.`;
+  const subject = isSignup
+    ? `Welcome to GamCiv — your verification code ${code}`
+    : `${t.subject} ${code}`;
+  return { template: t.template, subject, html, text };
 }
 
 export async function handleHookRequest(
@@ -201,27 +209,8 @@ export async function handleHookRequest(
     error: sent.ok ? null : sent.error,
   });
 
-  // Boss decision: a signup also gets the welcome email.
-  if (actionType === "signup" && sent.ok) {
-    const content = buildEmailContent({ template: "google_welcome", to });
-    const welcome = deps.resend
-      ? await deps.resend.send({
-        to,
-        subject: content.subject,
-        html: content.html,
-        text: content.text,
-        from,
-      })
-      : { ok: false as const, error: "RESEND_API_KEY not set" };
-    await logSystemEmail(deps.logDeps, {
-      to,
-      subject: content.subject,
-      template: "welcome",
-      status: welcome.ok ? "sent" : "failed",
-      error: welcome.ok ? null : welcome.error,
-    });
-  }
-
+  // Boss decision: signup gets a SINGLE email that both welcomes and
+  // verifies (merged in renderHookEmail above). No separate welcome send.
   // 2xx tells GoTrue the hook handled the send. Errors are already logged.
   return jsonResponse({});
 }
