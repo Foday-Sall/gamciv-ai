@@ -175,7 +175,8 @@ test("officers see only their institution and are redirected away from admin sec
   await page.goto(new URL("/dashboard/settings", dashboardOrigin).toString());
 
   await expect(page).toHaveURL(/\/dashboard\/institute\/?$/);
-  await expect(page.getByRole("heading", { name: "NAWEC", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Complaint overview" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Dashboard sections" })).toBeVisible();
   await expect(page.getByText("Complaint trend", { exact: true })).toBeVisible();
   await expect(page.getByText("Case status", { exact: true })).toBeVisible();
   await expect(page.getByText("Complaints by category", { exact: true })).toBeVisible();
@@ -188,6 +189,14 @@ test("officers see only their institution and are redirected away from admin sec
   await expect(page.getByText("API keys and secrets", { exact: true })).toHaveCount(0);
   await expect(page.getByText("TELEGRAM_BOT_TOKEN", { exact: true })).toHaveCount(0);
   expect(mocks.complaintQueryWasInstitutionScoped()).toBe(true);
+  const timeRange = page.getByRole("group", { name: "Trend time range" });
+  await timeRange.getByRole("button", { name: "7 days" }).click();
+  await expect(timeRange.getByRole("button", { name: "7 days" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("group", { name: "Complaint trend for the last 7 days" })).toBeVisible();
+  await page.getByRole("button", { name: "Hide resolved reports" }).click();
+  await expect(page.getByRole("button", { name: "Show resolved reports" })).toHaveAttribute("aria-pressed", "false");
+  await page.getByRole("navigation", { name: "Dashboard sections" }).getByRole("button", { name: /Complaints/ }).click();
+  await expect(page.getByRole("heading", { name: "Recent complaints" })).toBeInViewport();
   if (process.env.GAMCIV_DASHBOARD_SCREENSHOT === "1") {
     await page.screenshot({ path: "/tmp/gamciv-institution-dashboard.png", fullPage: true });
   }
@@ -211,12 +220,20 @@ test("the institution dashboard remains usable at a mobile width", async ({ page
   await installOfficerMocks(page);
   await page.goto(new URL("/dashboard/institute", dashboardOrigin).toString());
 
-  await expect(page.getByRole("heading", { name: "NAWEC", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Complaint overview" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Dashboard sections" })).toBeVisible();
   await expect(page.getByText("Complaint trend", { exact: true })).toBeVisible();
   await expect(page.getByText("Recent complaints", { exact: true })).toBeVisible();
+  const timeRange = page.getByRole("group", { name: "Trend time range" });
+  await expect(timeRange.getByRole("button", { name: "7 days" })).toBeVisible();
+  await timeRange.getByRole("button", { name: "7 days" }).click();
+  await expect(timeRange.getByRole("button", { name: "7 days" })).toHaveAttribute("aria-pressed", "true");
   const dimensions = await page.evaluate(() => ({
     documentWidth: document.documentElement.scrollWidth,
     viewportWidth: window.innerWidth,
   }));
   expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
+  if (process.env.GAMCIV_DASHBOARD_SCREENSHOT === "1") {
+    await page.screenshot({ path: "/tmp/gamciv-institution-dashboard-mobile.png", fullPage: true });
+  }
 });

@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { motion, type Variants } from "framer-motion"
 import {
-  Activity,
   AlertCircle,
-  ArrowUpRight,
   CalendarDays,
   CheckCircle2,
   Clock3,
@@ -11,19 +8,19 @@ import {
   Inbox,
   Loader2,
   LogOut,
+  MessageSquareText,
   RefreshCw,
   Search,
-  ShieldCheck,
   TrendingUp,
 } from "lucide-react"
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
   Legend,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -41,6 +38,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
 import {
   Table,
   TableBody,
@@ -89,11 +87,6 @@ const CHART_COLORS = [
   "var(--chart-4)",
   "var(--chart-5)",
 ]
-
-const cardMotion: Variants = {
-  hidden: { opacity: 0, y: 10 },
-  shown: { opacity: 1, y: 0, transition: { duration: 0.28, ease: "easeOut" } },
-}
 
 function statusBadgeVariant(status: string): "default" | "secondary" | "outline" | "warning" | "danger" {
   switch (status) {
@@ -150,13 +143,12 @@ function StatCard({
   tone: string
 }) {
   return (
-    <motion.div variants={cardMotion}>
-      <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md">
-        <CardContent className="p-5">
+      <Card className="h-full border-border/90 shadow-none">
+        <CardContent className="p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="mt-2 font-display text-3xl font-semibold tracking-tight tabular">
+              <p className="mt-2 font-display text-3xl font-semibold tracking-tight tabular-nums">
                 {value}
               </p>
             </div>
@@ -167,7 +159,6 @@ function StatCard({
           <p className="mt-3 text-xs text-muted-foreground">{hint}</p>
         </CardContent>
       </Card>
-    </motion.div>
   )
 }
 
@@ -191,14 +182,6 @@ function ChartCard({
   )
 }
 
-const tooltipStyle = {
-  borderRadius: 10,
-  borderColor: "var(--border)",
-  backgroundColor: "var(--card)",
-  color: "var(--card-foreground)",
-  fontSize: 12,
-}
-
 export default function InstitutionDashboard() {
   const [institution, setInstitution] = useState<InstitutionInfo | null>(null)
   const [rows, setRows] = useState<ComplaintRow[] | null>(null)
@@ -209,10 +192,38 @@ export default function InstitutionDashboard() {
   const [statsError, setStatsError] = useState<string | null>(null)
   const [dataLoading, setDataLoading] = useState(false)
   const [filter, setFilter] = useState("")
+  const [trendRange, setTrendRange] = useState<7 | 14>(14)
+  const [showReceived, setShowReceived] = useState(true)
+  const [showResolved, setShowResolved] = useState(true)
+  const [activeSection, setActiveSection] = useState("overview")
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
 
   useEffect(() => {
     document.title = "Institution dashboard - GamCiv"
   }, [])
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)")
+    const update = () => setPrefersReducedMotion(query.matches)
+    update()
+    query.addEventListener("change", update)
+    return () => query.removeEventListener("change", update)
+  }, [])
+
+  useEffect(() => {
+    const sections = ["overview", "analytics", "complaints"]
+      .map((id) => document.getElementById(id))
+      .filter((section): section is HTMLElement => section !== null)
+    if (!sections.length || !("IntersectionObserver" in window)) return
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
+      if (visible) setActiveSection(visible.target.id)
+    }, { rootMargin: "-140px 0px -55% 0px", threshold: [0, 0.15, 0.4] })
+    sections.forEach((section) => observer.observe(section))
+    return () => observer.disconnect()
+  }, [institution, stats])
 
   const loadDashboard = useCallback(async (institutionId: string) => {
     setDataLoading(true)
@@ -390,6 +401,17 @@ export default function InstitutionDashboard() {
     })),
     [stats],
   )
+  const visibleTrendData = useMemo(() => trendData.slice(-trendRange), [trendData, trendRange])
+  const trendTotals = useMemo(
+    () => visibleTrendData.reduce(
+      (totals, item) => ({
+        received: totals.received + item.received,
+        resolved: totals.resolved + item.resolved,
+      }),
+      { received: 0, resolved: 0 },
+    ),
+    [visibleTrendData],
+  )
 
   const statusData = useMemo(
     () => (stats?.by_status ?? [])
@@ -434,6 +456,14 @@ export default function InstitutionDashboard() {
   async function signOut() {
     await supabase.auth.signOut()
     window.location.href = "/dashboard/login"
+  }
+
+  function goToSection(section: string) {
+    document.getElementById(section)?.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "start",
+    })
+    setActiveSection(section)
   }
 
   if (checkingAccess) {
@@ -513,35 +543,20 @@ export default function InstitutionDashboard() {
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-7 md:px-6 md:py-9">
-      <section className="mb-6 overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-card to-card shadow-sm">
-        <div className="flex flex-col gap-5 p-5 sm:p-7 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
-              <Activity className="h-6 w-6" aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <div className="mb-1 flex flex-wrap items-center gap-2">
-                <h1 className="truncate font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-                  {institution?.name ?? "Institution dashboard"}
-                </h1>
-                <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">
-                  <ShieldCheck className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-                  Institution only
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Your complaint workload, response trends, and service performance.
-              </p>
-              <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-50" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-ok" />
-                </span>
-                Live updates · charts are scoped to {institution?.name ?? "your institution"}
-              </p>
-            </div>
+      <header className="mb-5 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">Institution workspace</Badge>
+            {institution?.name && <span className="text-sm text-muted-foreground">{institution.name}</span>}
           </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            Complaint overview
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Reports, response trends, and workload assigned to {institution?.name ?? "your institution"}.
+          </p>
+        </div>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Button
               variant="outline"
               onClick={() => institution && void loadDashboard(institution.id)}
@@ -555,9 +570,34 @@ export default function InstitutionDashboard() {
             <Button variant="ghost" onClick={() => void signOut()}>
               <LogOut className="mr-2 h-4 w-4" /> Sign out
             </Button>
-          </div>
         </div>
-      </section>
+      </header>
+
+      <nav aria-label="Dashboard sections" className="-mx-4 mb-5 border-b border-border bg-background px-4 md:-mx-6 md:px-6">
+        <div className="flex min-h-12 items-center gap-1 overflow-x-auto" role="group">
+          {[
+            { id: "overview", label: "Overview", icon: Inbox },
+            { id: "analytics", label: "Analytics", icon: TrendingUp },
+            { id: "complaints", label: "Complaints", icon: MessageSquareText, count: stats?.open },
+          ].map(({ id, label, icon: Icon, count }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => goToSection(id)}
+              aria-current={activeSection === id ? "location" : undefined}
+              className={`inline-flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                activeSection === id
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="h-4 w-4" aria-hidden="true" />
+              {label}
+              {count !== undefined && <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums">{count}</span>}
+            </button>
+          ))}
+        </div>
+      </nav>
 
       {statsError && (
         <Card className="mb-5 border-warn/30 bg-warn/5" role="status">
@@ -591,38 +631,105 @@ export default function InstitutionDashboard() {
         </Card>
       )}
 
-      <motion.section
-        initial="hidden"
-        animate="shown"
-        variants={{ hidden: {}, shown: { transition: { staggerChildren: 0.055 } } }}
-        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+      <section
+        id="overview"
+        className="scroll-mt-8 grid grid-cols-2 gap-3 max-[359px]:grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
         aria-label="Institution complaint summary"
       >
         {statCards.map((item) => (
           <StatCard key={item.label} {...item} />
         ))}
-      </motion.section>
+      </section>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <ChartCard title="Complaint trend" description="Reports received and resolved · last 14 days">
+      <section id="analytics" className="mt-5 scroll-mt-32" aria-label="Institution complaint analytics">
+      <div className="grid gap-4 xl:grid-cols-2">
+        <ChartCard title="Complaint trend" description="Daily reports received and resolved">
           {statsError ? (
             <EmptyChart>Trend data is unavailable until the analytics service reconnects.</EmptyChart>
-          ) : trendData.length === 0 ? (
+          ) : visibleTrendData.length === 0 ? (
             <EmptyChart>{dataLoading ? "Loading activity…" : "No trend data yet for your institution."}</EmptyChart>
           ) : (
-            <div className="h-[260px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData} margin={{ top: 10, right: 12, bottom: 0, left: -18 }}>
-                  <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                  <Line type="monotone" dataKey="received" name="Received" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="resolved" name="Resolved" stroke="var(--chart-2)" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            <>
+              <div className="mb-3 flex flex-col gap-3 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Trend time range">
+                  {([7, 14] as const).map((days) => (
+                    <Button
+                      key={days}
+                      type="button"
+                      size="sm"
+                      variant={trendRange === days ? "default" : "outline"}
+                      aria-pressed={trendRange === days}
+                      onClick={() => setTrendRange(days)}
+                    >
+                      {days} days
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Trend series">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={showReceived ? "outline" : "ghost"}
+                    aria-pressed={showReceived}
+                    aria-label={`${showReceived ? "Hide" : "Show"} received reports`}
+                    onClick={() => setShowReceived((visible) => !visible)}
+                  >
+                    <span className="h-2.5 w-2.5 rounded-sm bg-primary" aria-hidden="true" /> Received
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={showResolved ? "outline" : "ghost"}
+                    aria-pressed={showResolved}
+                    aria-label={`${showResolved ? "Hide" : "Show"} resolved reports`}
+                    onClick={() => setShowResolved((visible) => !visible)}
+                  >
+                    <span className="h-2.5 w-2.5 rounded-sm bg-chart-2" aria-hidden="true" /> Resolved
+                  </Button>
+                </div>
+              </div>
+              <p className="sr-only" aria-live="polite">
+                In the selected {trendRange}-day period, {trendTotals.received} reports were received and {trendTotals.resolved} were resolved.
+              </p>
+              <ChartContainer
+                config={{
+                  received: { label: "Received", color: "var(--chart-1)" },
+                  resolved: { label: "Resolved", color: "var(--chart-2)" },
+                }}
+                className="h-[230px] min-h-[230px] w-full sm:h-[260px] sm:min-h-[260px]"
+                role="group"
+                aria-label={`Complaint trend for the last ${trendRange} days`}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart accessibilityLayer data={visibleTrendData} margin={{ top: 10, right: 8, bottom: 0, left: -18 }}>
+                    <defs>
+                      <linearGradient id="receivedFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--color-received)" stopOpacity={0.22} />
+                        <stop offset="95%" stopColor="var(--color-received)" stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="resolvedFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--color-resolved)" stopOpacity={0.18} />
+                        <stop offset="95%" stopColor="var(--color-resolved)" stopOpacity={0.01} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="var(--border)" strokeDasharray="3 5" vertical={false} />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} minTickGap={18} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                    <YAxis allowDecimals={false} width={34} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                    <Tooltip content={<ChartTooltipContent />} />
+                    {showReceived && (
+                      <Area type="monotone" dataKey="received" name="Received" stroke="var(--color-received)" strokeWidth={2.5} fill="url(#receivedFill)" activeDot={{ r: 4 }} isAnimationActive={!prefersReducedMotion} animationDuration={260} />
+                    )}
+                    {showResolved && (
+                      <Area type="monotone" dataKey="resolved" name="Resolved" stroke="var(--color-resolved)" strokeWidth={2.5} strokeDasharray="5 3" fill="url(#resolvedFill)" activeDot={{ r: 4 }} isAnimationActive={!prefersReducedMotion} animationDuration={260} />
+                    )}
+                  </AreaChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground" aria-label="Selected period totals">
+                <span>Received: <strong className="font-semibold text-foreground tabular-nums">{trendTotals.received}</strong></span>
+                <span>Resolved: <strong className="font-semibold text-foreground tabular-nums">{trendTotals.resolved}</strong></span>
+              </div>
+            </>
           )}
         </ChartCard>
 
@@ -638,7 +745,7 @@ export default function InstitutionDashboard() {
                   <Pie data={statusData} dataKey="value" nameKey="label" innerRadius={62} outerRadius={94} paddingAngle={3} stroke="var(--card)" strokeWidth={3} isAnimationActive={false}>
                     {statusData.map((entry) => <Cell key={entry.label} fill={entry.fill} />)}
                   </Pie>
-                  <Tooltip contentStyle={tooltipStyle} />
+                  <Tooltip content={<ChartTooltipContent />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -658,7 +765,7 @@ export default function InstitutionDashboard() {
                   <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" horizontal={false} />
                   <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                   <YAxis type="category" dataKey="label" width={120} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(value) => String(value).length > 19 ? `${String(value).slice(0, 18)}…` : String(value)} />
-                  <Tooltip contentStyle={tooltipStyle} />
+                  <Tooltip content={<ChartTooltipContent />} />
                   <Bar dataKey="value" name="Complaints" fill="var(--chart-1)" radius={[0, 7, 7, 0]} maxBarSize={26} />
                 </BarChart>
               </ResponsiveContainer>
@@ -678,7 +785,7 @@ export default function InstitutionDashboard() {
                   <Pie data={channelData} dataKey="value" nameKey="label" innerRadius={62} outerRadius={94} paddingAngle={3} stroke="var(--card)" strokeWidth={3} isAnimationActive={false}>
                     {channelData.map((entry) => <Cell key={entry.label} fill={entry.fill} />)}
                   </Pie>
-                  <Tooltip contentStyle={tooltipStyle} />
+                  <Tooltip content={<ChartTooltipContent />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -686,13 +793,15 @@ export default function InstitutionDashboard() {
           )}
         </ChartCard>
       </div>
+      </section>
 
-      <Card className="mt-6 overflow-hidden">
+      <section id="complaints" className="mt-6 scroll-mt-32" aria-labelledby="recent-complaints-heading">
+      <Card className="overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div>
             <div className="flex items-center gap-2">
               <Inbox className="h-5 w-5 text-primary" aria-hidden="true" />
-              <h2 className="font-display text-lg font-semibold">Recent complaints</h2>
+              <h2 id="recent-complaints-heading" className="font-display text-lg font-semibold">Recent complaints</h2>
               <Badge variant="secondary">{stats ? stats.total : "—"} total</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -772,10 +881,10 @@ export default function InstitutionDashboard() {
         </div>
       </Card>
 
-      <p className="mt-5 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
-        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
-        This workspace only displays complaint records and aggregates for {institution?.name ?? "your institution"}.
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        Complaint records and analytics are limited to {institution?.name ?? "your institution"}.
       </p>
+      </section>
     </main>
   )
 }
