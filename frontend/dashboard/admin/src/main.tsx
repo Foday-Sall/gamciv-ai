@@ -37,7 +37,7 @@ function AdminLayoutGate() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename="/dashboard">
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/institute" element={<InstitutionDashboard />} />

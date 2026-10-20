@@ -40,11 +40,11 @@ export function AdminLayout({
       if (cancelled) return
       if (!info.session) {
         // Not signed in: the login screen is all they get.
-        window.location.href = loginPath
+        window.location.href = "/dashboard" + loginPath
         return
       }
       if (info.role === "officer") {
-        window.location.href = officerPath
+        window.location.href = "/dashboard" + officerPath
         return
       }
       if (info.role !== "admin") {

@@ -112,7 +112,7 @@ export default function InstitutionDashboard() {
       const { data: sessionData } = await supabase.auth.getSession()
       const user = sessionData.session?.user
       if (!user) {
-        window.location.href = "/login"
+        window.location.href = "/dashboard/login"
         return
       }
       // The officers row for this user pins the institution name and id.
@@ -160,7 +160,7 @@ export default function InstitutionDashboard() {
 
   async function signOut() {
     await supabase.auth.signOut()
-    window.location.href = "/login"
+    window.location.href = "/dashboard/login"
   }
 
   return (

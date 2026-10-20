@@ -41,11 +41,11 @@ function authErrorText(message: string): string {
 /** Route a signed-in session by role. Returns where it sent the user. */
 async function routeByRole(info: SessionInfo): Promise<boolean> {
   if (info.role === "admin") {
-    window.location.href = "/"
+    window.location.href = "/dashboard/"
     return true
   }
   if (info.role === "officer") {
-    window.location.href = "/institute"
+    window.location.href = "/dashboard/institute"
     return true
   }
   return false
