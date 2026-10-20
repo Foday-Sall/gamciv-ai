@@ -31,19 +31,19 @@ async function makeDeps(code: string | null) {
     settings: null,
     resend: null,
     gowa: null,
-    fetchImpl: async (input, init) => {
+    fetchImpl: (input, init) => {
       const url = String(input);
       if (init?.method === "PATCH") {
         writes.push({
           url,
           body: JSON.parse(String(init.body)) as Record<string, unknown>,
         });
-        return new Response(null, { status: 204 });
+        return Promise.resolve(new Response(null, { status: 204 }));
       }
       if (url.includes("/rest/v1/otp_codes?")) {
-        return Response.json(rows);
+        return Promise.resolve(Response.json(rows));
       }
-      return new Response("Not found", { status: 404 });
+      return Promise.resolve(new Response("Not found", { status: 404 }));
     },
     now,
   };
