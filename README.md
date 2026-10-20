@@ -8,7 +8,6 @@
 [![Supabase](https://img.shields.io/badge/Supabase-self_hosted-3FCF8E?logo=supabase&logoColor=black)](https://supabase.com)
 [![Deno](https://img.shields.io/badge/Deno-2-70AD47?logo=deno&logoColor=white)](https://deno.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-RLS_and_RPCs-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
-[![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com)
 [![Kong](https://img.shields.io/badge/Kong-gateway-000000)](https://konghq.com)
 [![Resend](https://img.shields.io/badge/Resend-email-000000)](https://resend.com)
@@ -25,7 +24,7 @@ GamCiv AI is a civic-complaints platform for The Gambia. Citizens report pothole
 - **Status notifications.** The database queues notifications and `pg_net` calls the `notify-out` function, which sends over WhatsApp first and falls back to SMS (Termii or a TextBee-style Android gateway).
 - **Auth that reaches people.** Email signup with 6-digit codes, welcome email and magic links via Resend behind a GoTrue send-email hook; phone verification via WhatsApp OTP.
 - **Super-admin console.** Institutions, staff accounts, access-control levels and per-category limits, plus an audit log.
-- **Optional Go outbound bus.** A Go service under `channels/` consolidates outbound sends behind one MessageBus; unset, the functions call GOWA and Telegram directly.
+- **Optional message bridge hook.** Edge functions can route outbound sends through an external message-bridge service via `CHANNELS_URL`; unset, they call GOWA and Telegram directly. No bridge service is included — one can be added later.
 
 ## Architecture
 
@@ -98,7 +97,6 @@ gamciv-ai/
 │   ├── tests/                Deno unit tests (stubbed network)
 │   ├── scripts/deploy.sh     edge function deploy to the VPS
 │   └── README.md             API layer details and local development
-├── channels/                 optional Go service: MessageBus, /health + /send endpoints
 ├── deploy/                   frontend deploy scripts (landing, app, dashboard)
 ├── .github/workflows/        CI: deno lint + tests, vite builds
 ├── DEPLOY.md                 step-by-step server deployment guide
@@ -179,7 +177,7 @@ The full, step-by-step server deployment guide lives in [DEPLOY.md](DEPLOY.md). 
    - **WhatsApp:** point the GOWA per-device webhook at `https://api.pocketsoftware.dev/functions/v1/whatsapp-intake` and set `GOWA_WEBHOOK_SECRET` to match. See [backend/channels/whatsapp/](backend/channels/whatsapp).
    - **Telegram:** follow the go-live runbook at [backend/docs/telegram-golive.md](backend/docs/telegram-golive.md) (BotFather token, webhook registration, smoke test).
    - **SMS fallback:** provider selection and config at [backend/channels/sms/](backend/channels/sms).
-8. Optional: run the Go outbound service and set `CHANNELS_URL` so sends go through the bus. Setup notes in [channels/cmd/gamciv-channels/main.go](channels/cmd/gamciv-channels/main.go) and [backend/.env.functions.example](backend/.env.functions.example).
+8. Optional: an external message-bridge service can be added later; when `CHANNELS_URL` is set in `.env.functions`, outbound sends route through its `POST /send` endpoint. No bridge is included — unset, sends go directly to GOWA and Telegram.
 
 ## Environment variables
 
@@ -205,7 +203,7 @@ Names only, no values. Nothing is committed: every env file in the repo is an `*
 | `TERMII_API_KEY`, `TERMII_SENDER_ID`, `TERMII_ENDPOINT` | Termii SMS (fallback provider) |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_API_BASE` | Telegram bot channel |
 | `RESEND_API_KEY`, `RESEND_FROM`, `SEND_EMAIL_HOOK_SECRET` | Auth email via the GoTrue send-email hook |
-| `CHANNELS_URL` | Optional: route sends through the Go service |
+| `CHANNELS_URL` | Optional: route sends through an external message-bridge service (not included; unset = direct sends) |
 
 **GoTrue (Docker compose env for the send-email hook):**
 
@@ -215,14 +213,6 @@ Names only, no values. Nothing is committed: every env file in the repo is an `*
 | `GOTRUE_HOOK_SEND_EMAIL_ENABLED` | Turns the hook on |
 | `GOTRUE_HOOK_SEND_EMAIL_URI` | Edge function URL GoTrue calls instead of SMTP |
 | `GOTRUE_HOOK_SEND_EMAIL_SECRETS` | `v1,whsec_...` standardwebhooks secret, pairing with `SEND_EMAIL_HOOK_SECRET` |
-
-**Go service (`channels/`):**
-
-| Variable | Purpose |
-|---|---|
-| `CHANNELS_HTTP_ADDR`, `CHANNELS_CONFIG`, `CHANNELS_LOG_LEVEL` | HTTP API, optional config file, log level |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOW_FROM` | Telegram channel enable + sender allowlist |
-| `WHATSAPP_BRIDGE_URL`, `WHATSAPP_ALLOW_FROM` | GOWA websocket bridge + sender allowlist |
 
 **Deploy scripts ([backend/scripts/](backend/scripts), [deploy/](deploy))**
 
@@ -246,6 +236,5 @@ Names only, no values. Nothing is committed: every env file in the repo is an `*
 
 ## License and credits
 
-- The Go service under `channels/` is released under the MIT license (see `channels/LICENSE`).
 - The hackathon code itself has no license file yet; the team retains all rights for the competition.
 - Built by Team Vertex for the UTG-ITCA hackathon, Challenge 01: Citizen Services and Public Complaints. The roster is in [TEAM.md](TEAM.md).

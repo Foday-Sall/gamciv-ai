@@ -11,7 +11,6 @@ Repo layout (see [README.md](README.md) for the full tree):
 - `backend/functions` - Deno edge functions (self-hosted Supabase)
 - `backend/db` - SQL migrations, applied in order
 - `backend/scripts/deploy.sh` - edge function deployment
-- `channels/` - optional Go service (Telegram/WhatsApp bridge)
 
 ## 1) Frontends: one .env each (copy the example, fill in, build)
 
@@ -87,10 +86,7 @@ logs to `public.email_log`, and adds a welcome email on signup.
   webhook. Full go-live runbook: [`backend/docs/telegram-golive.md`](backend/docs/telegram-golive.md).
   Do not set the webhook before the token is in place (requests fail 500 without it).
 - **AI routing:** `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY` (any OpenAI-compatible endpoint).
-- **Optional Go channels service:** run `channels/cmd/gamciv-channels` (env vars in the
-  header comment of `main.go`: `TELEGRAM_BOT_TOKEN`, `WHATSAPP_BRIDGE_URL`,
-  `WHATSAPP_ALLOW_FROM`, `CHANNELS_HTTP_ADDR`), then set `CHANNELS_URL` in `.env.functions`
-  so outbound sends route through the bus. Unset = direct sends.
+- **Optional message bridge:** no bridge service is included. If one is added later, setting `CHANNELS_URL` in `.env.functions` routes outbound sends through its `POST /send` endpoint. Unset = direct sends.
 - **notify-out auth:** the database calls it via `pg_net` with the `x-gamciv-key` header
   carrying `INTERNAL_FUNCTION_KEY` (generate with `openssl rand -hex 24`).
 
