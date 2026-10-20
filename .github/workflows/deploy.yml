@@ -80,11 +80,9 @@ jobs:
             find "$dir" -type f -exec chmod 644 {} +
           done
 
-      - name: Smoke-test production-configured build before upload
+      - name: Install Chromium for post-deployment browser verification
         working-directory: frontend/app
-        run: |
-          npx playwright install --with-deps chromium
-          npm run test:e2e
+        run: npx playwright install --with-deps chromium
 
       - name: Deploy to VPS, validate Nginx, and verify served routes/assets
         env:
@@ -97,7 +95,7 @@ jobs:
           test -n "$VPS_HOST"
 
           # Keep the existing idempotent database migration deployment behavior.
-          for migration in backend/db/0015_institution_dashboard.sql backend/db/0016_dispatch.sql backend/db/0017_profile_avatar.sql backend/db/0017_whatsapp_numbers.sql; do
+          for migration in backend/db/0015_institution_dashboard.sql backend/db/0016_dispatch.sql backend/db/0017_profile_avatar.sql backend/db/0017_whatsapp_numbers.sql backend/db/0019_citizen_evidence.sql; do
             if [ -f "$migration" ]; then
               name=$(basename "$migration")
               scp_cmd "$migration" "$VPS_HOST:/tmp/$name"
@@ -115,7 +113,7 @@ jobs:
           set -eu
           docker cp /opt/gamciv-nginx-default.conf gamciv-landing:/etc/nginx/conf.d/default.conf
           docker cp /opt/gamciv-app/html/. gamciv-landing:/usr/share/nginx/html/app/
-          docker cp /opt/gamciv-dashboard/html/. gamciv-landing:/usr/share/nginx/html/dashboard/
+          docker cp /opt/gamciv-dashboard/html/. gamciv-landing:/usr/share/nginx/html/dash/
           docker cp /opt/gamciv-landing/html/. gamciv-landing:/usr/share/nginx/html/
           docker exec gamciv-landing sh -c 'find /usr/share/nginx/html -type d -exec chmod 755 {} + && find /usr/share/nginx/html -type f -exec chmod 644 {} +'
           docker exec gamciv-landing nginx -t
@@ -135,7 +133,7 @@ jobs:
           }
           check_route /app/login
           check_route /app/signup
-          check_route /dashboard/
+          check_route /dash/
           check_route /
           REMOTE
 
