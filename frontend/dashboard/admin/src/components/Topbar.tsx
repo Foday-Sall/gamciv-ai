@@ -1,4 +1,4 @@
-import { Search, Menu, Bell } from "lucide-react"
+import { Search, Menu, Bell, Loader2 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { supabase } from "@/lib/secretsClient"
+import { useState } from "react"
 
 export function Topbar({
   onMenu,
@@ -20,6 +22,18 @@ export function Topbar({
   search: string
   onSearchChange: (value: string) => void
 }) {
+  const [signingOut, setSigningOut] = useState(false)
+
+  async function signOut() {
+    setSigningOut(true)
+    try {
+      await supabase.auth.signOut()
+    } finally {
+      // Session is gone (or the call failed) — leave the console regardless.
+      window.location.href = "/app/login"
+    }
+  }
+
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur-md md:px-6">
       <Button variant="ghost" size="icon" className="md:hidden" onClick={onMenu} aria-label="Open navigation">
@@ -70,7 +84,15 @@ export function Topbar({
             <DropdownMenuItem disabled>
               <Badge variant="success">Single administrator session</Badge>
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={(event) => event.preventDefault()}>Sign out</DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault()
+                if (!signingOut) void signOut()
+              }}
+            >
+              {signingOut ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+              Sign out
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
