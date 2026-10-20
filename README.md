@@ -246,6 +246,6 @@ Names only, no values. Nothing is committed: every env file in the repo is an `*
 
 ## License and credits
 
-- The Go service under `channels/` is adapted from PicoClaw and released under the MIT license (see `channels/LICENSE`).
+- The Go service under `channels/` is released under the MIT license (see `channels/LICENSE`).
 - The hackathon code itself has no license file yet; the team retains all rights for the competition.
 - Built by Team Vertex for the UTG-ITCA hackathon, Challenge 01: Citizen Services and Public Complaints. The roster is in [TEAM.md](TEAM.md).
