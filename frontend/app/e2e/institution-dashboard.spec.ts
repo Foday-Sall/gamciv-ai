@@ -131,7 +131,7 @@ async function installOfficerMocks(page: Page, failDashboardData = false) {
     socket.close();
   });
 
-  const projectRef = productionBaseURL ? "api" : "ci-placeholder";
+  const projectRefs = productionBaseURL ? ["api"] : ["ci-placeholder", "api"];
   const fakeSession = {
     access_token: "test-access-token",
     refresh_token: "test-refresh-token",
@@ -151,10 +151,12 @@ async function installOfficerMocks(page: Page, failDashboardData = false) {
   };
 
   await page.addInitScript(
-    ({ storageKey, session }) => {
-      window.localStorage.setItem(storageKey, JSON.stringify(session));
+    ({ storageKeys, session }) => {
+      for (const storageKey of storageKeys) {
+        window.localStorage.setItem(storageKey, JSON.stringify(session));
+      }
     },
-    { storageKey: `sb-${projectRef}-auth-token`, session: fakeSession },
+    { storageKeys: projectRefs.map((projectRef) => `sb-${projectRef}-auth-token`), session: fakeSession },
   );
 
   return {
