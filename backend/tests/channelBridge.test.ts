@@ -106,7 +106,7 @@ Deno.test("sendOrFallback falls back to direct send when CHANNELS_URL is unset",
 Deno.test("sendOrFallback routes through the bridge when CHANNELS_URL is set", async () => {
   let directCalled = 0;
   let postedPath = "";
-  const fetchStub = ((_url: string | URL, init?: RequestInit) => {
+  const fetchStub = ((_url: string | URL, _init?: RequestInit) => {
     postedPath = String(_url);
     return Promise.resolve(jsonRes({ status: "queued" }, 202));
   }) as typeof fetch;
