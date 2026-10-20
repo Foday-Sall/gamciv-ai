@@ -129,10 +129,10 @@ export function renderHookEmail(
   const code = token;
   const html = emailHtml(t.title, [
     `${t.lead} Your code is <strong>${code}</strong>.`,
-    "It expires soon and can be used once.",
+    "It expires in 15 minutes and can be used once.",
     `If you did not request this code, ignore this message. Sent to ${to}.`,
   ]);
-  const text = `${t.title}. ${t.lead.replace("Use this code", "Code")}: ${code}. It expires soon and can be used once.`;
+  const text = `${t.title}. ${t.lead.replace("Use this code", "Code")}: ${code}. It expires in 15 minutes and can be used once.`;
   return { template: t.template, subject: `${t.subject} ${code}`, html, text };
 }
 
