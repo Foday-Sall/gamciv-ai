@@ -1,0 +1,63 @@
+# Deploys the site to the VPS on every push to main.
+# Requires repo secrets: DEPLOY_SSH_KEY (private key), VPS_HOST (user@host)
+# Set once via: gh secret set DEPLOY_SSH_KEY < keyfile   /   gh secret set VPS_HOST
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            frontend/app/package-lock.json
+            frontend/dashboard/admin/package-lock.json
+            frontend/landing/package-lock.json
+
+      - name: Build frontends
+        run: |
+          set -e
+          for d in frontend/app frontend/dashboard/admin frontend/landing; do
+            echo "== building $d"
+            (cd "$d" && npm ci && npm run build)
+          done
+
+      - name: Set up SSH
+        run: |
+          install -m 600 /dev/null /tmp/deploy_key
+          echo "$DEPLOY_SSH_KEY" > /tmp/deploy_key
+          ssh-keyscan -H "$VPS_HOST_ADDR" >> /root/.ssh/known_hosts 2>/dev/null
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          VPS_HOST_ADDR: ${{ secrets.VPS_HOST_ADDR }}
+
+      - name: Deploy to VPS
+        run: |
+          set -e
+          export SSH="ssh -i /tmp/deploy_key $VPS_HOST"
+          export SCP="scp -i /tmp/deploy_key"
+          # frontends: copy built dist folders to nginx roots
+          $SSH "mkdir -p /opt/gamciv-app/html /opt/gamciv-dashboard/html /opt/gamciv-landing/html"
+          $SCP -r frontend/app/dist/. "$VPS_HOST:/opt/gamciv-app/html/"
+          $SCP -r frontend/dashboard/admin/dist/. "$VPS_HOST:/opt/gamciv-dashboard/html/"
+          $SCP -r frontend/landing/dist/. "$VPS_HOST:/opt/gamciv-landing/html/"
+          # backend functions: rsync to the supabase functions volume and restart
+          $SSH "mkdir -p /opt/supabase/docker/volumes/functions"
+          $SCP -r backend/functions/. "$VPS_HOST:/opt/supabase/docker/volumes/functions/"
+          $SSH "cd /opt/supabase/docker && docker compose restart functions"
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
