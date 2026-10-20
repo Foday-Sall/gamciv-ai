@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { motion, type Variants } from "framer-motion"
 import {
   AlertCircle,
   CalendarDays,
@@ -16,8 +17,6 @@ import {
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -39,6 +38,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
+import { AnimatedNumber } from "@/components/AnimatedNumber"
 import { OfficerShell } from "@/components/OfficerShell"
 import { ComplaintsMap } from "@/components/ComplaintsMap"
 import { ComplaintDetailsDialog } from "@/components/ComplaintDetailsDialog"
@@ -95,6 +95,16 @@ const CHART_COLORS = [
   "var(--chart-5)",
 ]
 
+const entranceContainer: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.06 } },
+}
+
+const entranceItem: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: "easeOut" } },
+}
+
 function statusBadgeVariant(status: string): "default" | "secondary" | "outline" | "warning" | "danger" {
   switch (status) {
     case "in_progress":
@@ -150,14 +160,20 @@ function StatCard({
   tone: string
 }) {
   return (
-      <Card className="card-sheen h-full border-border/90 shadow-none transition-shadow hover:shadow-sm">
+      <Card className="card-sheen h-full border-border/90 shadow-none transition-colors hover:border-primary/40">
         <CardContent className="p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="mt-2 font-display text-3xl font-semibold tracking-tight tabular-nums">
-                {value}
-              </p>
+              <div className="mt-2 min-h-9">
+                {typeof value === "number" ? (
+                  <AnimatedNumber value={value} />
+                ) : (
+                  <span className="font-display text-3xl font-semibold tracking-tight tabular-nums">
+                    {value}
+                  </span>
+                )}
+              </div>
             </div>
             <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}>
               <Icon className="h-5 w-5" aria-hidden="true" />
@@ -204,7 +220,9 @@ export default function InstitutionDashboard() {
   const [showResolved, setShowResolved] = useState(true)
   const [activeSection, setActiveSection] = useState<"overview" | "map" | "analytics" | "complaints">("overview")
   const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null)
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  )
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState<string | null>(null)
@@ -424,6 +442,7 @@ export default function InstitutionDashboard() {
       .map((item) => ({ label: item.category, value: item.count })),
     [stats],
   )
+  const categoryMax = Math.max(1, ...categoryData.map((item) => item.value))
 
   const channelData = useMemo(
     () => (stats?.by_channel ?? [])
@@ -590,7 +609,12 @@ export default function InstitutionDashboard() {
       onSignOut={requestSignOut}
       refreshing={dataLoading}
     >
-      <header className="mb-5 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <motion.header
+        variants={entranceItem}
+        initial={prefersReducedMotion ? false : "hidden"}
+        animate="visible"
+        className="mb-5 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between"
+      >
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">
@@ -605,7 +629,7 @@ export default function InstitutionDashboard() {
             Monitor incoming reports, service demand, and response progress in one place.
           </p>
         </div>
-      </header>
+      </motion.header>
 
       {statsError && (
         <Card className="mb-5 border-warn/30 bg-warn/5" role="status">
@@ -639,18 +663,30 @@ export default function InstitutionDashboard() {
         </Card>
       )}
 
-      <section
+      <motion.section
         id="overview"
         className="scroll-mt-8 grid grid-cols-2 gap-3 max-[359px]:grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
         aria-label="Complaint operations summary"
+        variants={entranceContainer}
+        initial={prefersReducedMotion ? false : "hidden"}
+        animate="visible"
       >
         {statCards.map((item) => (
-          <StatCard key={item.label} {...item} />
+          <motion.div key={item.label} variants={entranceItem} className="h-full">
+            <StatCard {...item} />
+          </motion.div>
         ))}
-      </section>
+      </motion.section>
 
       <section id="map" className="mt-6 scroll-mt-24" aria-labelledby="complaint-map-heading">
-        <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.6fr)_minmax(290px,0.8fr)]">
+        <motion.div
+          className="grid gap-4 2xl:grid-cols-[minmax(0,1.6fr)_minmax(290px,0.8fr)]"
+          variants={entranceContainer}
+          initial={prefersReducedMotion ? false : "hidden"}
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.12 }}
+        >
+          <motion.div variants={entranceItem}>
           <Card className="overflow-hidden">
             <CardHeader>
               <CardTitle id="complaint-map-heading" className="flex items-center gap-2">
@@ -665,7 +701,9 @@ export default function InstitutionDashboard() {
               />
             </CardContent>
           </Card>
+          </motion.div>
 
+          <motion.div variants={entranceItem}>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -706,11 +744,19 @@ export default function InstitutionDashboard() {
               )}
             </CardContent>
           </Card>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
       <section id="analytics" className="mt-6 scroll-mt-32" aria-label="Complaint analytics and service demand">
-      <div className="grid gap-4 xl:grid-cols-2">
+      <motion.div
+        className="grid gap-4 xl:grid-cols-2"
+        variants={entranceContainer}
+        initial={prefersReducedMotion ? false : "hidden"}
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.12 }}
+      >
+        <motion.div variants={entranceItem}>
         <ChartCard title="Intake and resolution trend" description="Daily reports received versus resolved">
           {statsError ? (
             <EmptyChart>Trend data is unavailable until the analytics service reconnects.</EmptyChart>
@@ -800,7 +846,9 @@ export default function InstitutionDashboard() {
             </>
           )}
         </ChartCard>
+        </motion.div>
 
+        <motion.div variants={entranceItem}>
         <ChartCard title="Workload by status" description="How assigned reports are progressing">
           {statsError ? (
             <EmptyChart>Status data is unavailable until the analytics service reconnects.</EmptyChart>
@@ -810,7 +858,7 @@ export default function InstitutionDashboard() {
             <div className="h-[260px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={statusData} dataKey="value" nameKey="label" innerRadius={62} outerRadius={94} paddingAngle={3} stroke="var(--card)" strokeWidth={3} isAnimationActive={false}>
+                  <Pie data={statusData} dataKey="value" nameKey="label" innerRadius={62} outerRadius={94} paddingAngle={3} stroke="var(--card)" strokeWidth={3} isAnimationActive={!prefersReducedMotion} animationDuration={320}>
                     {statusData.map((entry) => <Cell key={entry.label} fill={entry.fill} />)}
                   </Pie>
                   <Tooltip content={<ChartTooltipContent />} />
@@ -820,27 +868,61 @@ export default function InstitutionDashboard() {
             </div>
           )}
         </ChartCard>
+        </motion.div>
 
+        <motion.div variants={entranceItem}>
         <ChartCard title="Demand by category" description="Most reported service areas assigned here">
           {statsError ? (
             <EmptyChart>Category data is unavailable until the analytics service reconnects.</EmptyChart>
           ) : categoryData.length === 0 ? (
             <EmptyChart>{dataLoading ? "Loading category data…" : "No category data yet."}</EmptyChart>
           ) : (
-            <div className="h-[260px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categoryData} layout="vertical" margin={{ top: 4, right: 18, bottom: 4, left: 8 }}>
-                  <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" horizontal={false} />
-                  <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                  <YAxis type="category" dataKey="label" width={120} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(value) => String(value).length > 19 ? `${String(value).slice(0, 18)}…` : String(value)} />
-                  <Tooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="value" name="Complaints" fill="var(--chart-1)" radius={[0, 7, 7, 0]} maxBarSize={26} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="grid grid-cols-1 gap-x-5 gap-y-3 py-1 sm:grid-cols-2" aria-label="Reports by category">
+              {categoryData.map((item, index) => {
+                const width = Math.max(6, (item.value / categoryMax) * 100)
+                const label = formatLabel(item.label)
+                return (
+                  <motion.div
+                    key={item.label}
+                    initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, amount: 0.7 }}
+                    transition={{
+                      duration: prefersReducedMotion ? 0 : 0.28,
+                      delay: prefersReducedMotion ? 0 : index * 0.035,
+                      ease: "easeOut",
+                    }}
+                    className="space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 truncate text-foreground" title={label}>{label}</span>
+                      <span className="shrink-0 font-semibold tabular-nums text-foreground">{item.value.toLocaleString()}</span>
+                    </div>
+                    <div
+                      role="meter"
+                      aria-label={`Reports in ${label}`}
+                      aria-valuemin={0}
+                      aria-valuemax={categoryMax}
+                      aria-valuenow={item.value}
+                      className="h-2 overflow-hidden rounded-full bg-muted"
+                    >
+                      <motion.div
+                        initial={prefersReducedMotion ? false : { width: 0 }}
+                        whileInView={{ width: `${width}%` }}
+                        viewport={{ once: true, amount: 0.7 }}
+                        transition={{ duration: prefersReducedMotion ? 0 : 0.42, ease: "easeOut" }}
+                        className="h-full rounded-full bg-primary"
+                      />
+                    </div>
+                  </motion.div>
+                )
+              })}
             </div>
           )}
         </ChartCard>
+        </motion.div>
 
+        <motion.div variants={entranceItem}>
         <ChartCard title="Submission channels" description="How citizens submitted reports to this institution">
           {statsError ? (
             <EmptyChart>Channel data is unavailable until the analytics service reconnects.</EmptyChart>
@@ -850,7 +932,7 @@ export default function InstitutionDashboard() {
             <div className="h-[260px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={channelData} dataKey="value" nameKey="label" innerRadius={62} outerRadius={94} paddingAngle={3} stroke="var(--card)" strokeWidth={3} isAnimationActive={false}>
+                  <Pie data={channelData} dataKey="value" nameKey="label" innerRadius={62} outerRadius={94} paddingAngle={3} stroke="var(--card)" strokeWidth={3} isAnimationActive={!prefersReducedMotion} animationDuration={320}>
                     {channelData.map((entry) => <Cell key={entry.label} fill={entry.fill} />)}
                   </Pie>
                   <Tooltip content={<ChartTooltipContent />} />
@@ -860,10 +942,19 @@ export default function InstitutionDashboard() {
             </div>
           )}
         </ChartCard>
-      </div>
+        </motion.div>
+      </motion.div>
       </section>
 
-      <section id="complaints" className="mt-8 scroll-mt-32" aria-labelledby="recent-complaints-heading">
+      <motion.section
+        id="complaints"
+        className="mt-8 scroll-mt-32"
+        aria-labelledby="recent-complaints-heading"
+        initial={prefersReducedMotion ? false : "hidden"}
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.08 }}
+        variants={entranceItem}
+      >
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div>
@@ -962,7 +1053,7 @@ export default function InstitutionDashboard() {
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Complaint records and analytics are limited to {institution?.name ?? "your institution"}.
       </p>
-      </section>
+      </motion.section>
       <ComplaintDetailsDialog
         complaintId={selectedComplaintId}
         onOpenChange={(open) => { if (!open) setSelectedComplaintId(null) }}
