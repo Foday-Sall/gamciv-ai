@@ -53,18 +53,12 @@ const NOTIFICATIONS: Array<{ key: keyof AdminSettings["notifications"]; label: s
   { key: "weeklyDigest", label: "Weekly digest", hint: "Summary of volume and response performance" },
 ]
 
-// Keys the panel knows about, in display order. Custom keys appear after.
+// Keys the panel manages, in display order. Boss's rule: only these three are
+// editable from the UI; everything else lives server-side only.
 const KNOWN_KEYS: Array<{ key: string; label: string; hint: string }> = [
-  { key: "RESEND_API_KEY", label: "Resend API key", hint: "Email delivery (RESEND_API_KEY)" },
-  { key: "RESEND_FROM", label: "Resend from address", hint: "Sender identity, e.g. GamCiv <noreply@domain>" },
-  { key: "AI_API_KEY", label: "AI provider API key", hint: "Classification model access" },
-  { key: "AI_BASE_URL", label: "AI base URL", hint: "OpenAI-compatible endpoint" },
-  { key: "AI_MODEL", label: "AI model", hint: "Model name at the provider" },
-  { key: "GOWA_BASIC_AUTH", label: "GOWA basic auth", hint: "user:password for the WhatsApp gateway" },
-  { key: "GOWA_BASE_URL", label: "GOWA base URL", hint: "Gateway REST endpoint" },
-  { key: "GOWA_WEBHOOK_SECRET", label: "GOWA webhook secret", hint: "Shared HMAC for inbound webhooks" },
-  { key: "TELEGRAM_BOT_TOKEN", label: "Telegram bot token", hint: "From BotFather" },
-  { key: "TELEGRAM_WEBHOOK_SECRET", label: "Telegram webhook secret", hint: "X-Telegram-Bot-Api-Secret-Token check" },
+  { key: "RESEND_API_KEY", label: "Resend API key", hint: "Email delivery (verification codes, welcome emails)" },
+  { key: "AI_API_KEY", label: "AI API key (Cloudflare / OpenAI-compatible)", hint: "Report classification and voice transcription" },
+  { key: "TELEGRAM_BOT_TOKEN", label: "Telegram bot token", hint: "From BotFather, controls @Gamhelpz_bot" },
 ]
 
 const CUSTOM_KEY_PATTERN = /^CUSTOM_[A-Z0-9_]{1,40}$/
