@@ -33,6 +33,7 @@ import {
   type OtpRecord,
 } from "../_shared/otp.ts";
 import { FetchResendClient, sendAndLogSystemEmail, type ResendClient } from "../_shared/resend.ts";
+import { getSenderNumber } from "../_shared/whatsappNumbers.ts";
 
 export interface AuthVerifyDeps {
   postgrestUrl: string;
@@ -381,7 +382,9 @@ export async function handleSendPhoneOtp(
   if (!deps.gowa) {
     return errorResponse(503, "WhatsApp delivery is not configured. Try again later.");
   }
-  const settings = await getSettings(deps);
+  // Sender number: the admin-managed registry (role=otp, linked) first, then
+  // the legacy app_settings entry. Both are read via the service role.
+  const sender = await getSenderNumber(deps.postgrestUrl, deps.serviceRoleKey, deps.fetchImpl);
   const code = generateOtp();
   await retireActiveOtps(deps, phone, "phone_verify");
   await restInsert(deps, "otp_codes", {
@@ -392,7 +395,7 @@ export async function handleSendPhoneOtp(
     attempts: 0,
   });
   try {
-    await deps.gowa.sendMessage(phone, whatsappOtpMessage(code, settings.whatsapp_sender_number));
+    await deps.gowa.sendMessage(phone, whatsappOtpMessage(code, sender.sender));
   } catch (e) {
     // Distinguish an unroutable/invalid number from a generic delivery
     // failure, so the UI can tell the person what to fix (e.g. GOWA's
@@ -406,8 +409,8 @@ export async function handleSendPhoneOtp(
     }
     return errorResponse(502, "WhatsApp delivery failed. Try again in a few minutes.");
   }
-  const hint = settings.whatsapp_sender_number
-    ? `We sent a verification code from WhatsApp via +${settings.whatsapp_sender_number}`
+  const hint = sender.sender
+    ? `We sent a verification code from WhatsApp via +${sender.sender}`
     : "We sent a verification code from WhatsApp";
   return jsonResponse({ sent: true, message: hint });
 }
