@@ -101,17 +101,21 @@ export async function loadAppSettings(
   const rows = await res.json() as Array<{ key: string; value: unknown }>;
   const pick = (name: string): string | null => {
     const row = rows.find((r) => r.key === name);
-    let v = row?.value;
+    const v = row?.value;
     // app_settings.value is JSONB: the WhatsApp sender was saved as a bare
     // number (2205111924), not a string, and a strict typeof-string check
     // silently returned null — so the OTP send lost its sender hint. Accept
     // scalar JSON values and coerce to the trimmed string form.
-    if (v === null || v === undefined) return null;
-    if (typeof v === "object") return null;
-    if (typeof v === "number") v = String(v);
-    else if (typeof v === "boolean") v = String(v);
-    else if (typeof v !== "string") return null;
-    return v.trim().length > 0 ? v.trim() : null;
+    if (typeof v === "string") {
+      return v.trim().length > 0 ? v.trim() : null;
+    }
+    if (typeof v === "number") {
+      return String(v);
+    }
+    if (typeof v === "boolean") {
+      return String(v);
+    }
+    return null;
   };
   return {
     whatsapp_sender_number: pick("whatsapp_sender_number"),
