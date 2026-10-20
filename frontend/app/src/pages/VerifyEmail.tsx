@@ -13,7 +13,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { supabase, isNetworkError } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
+import { friendlyAuthError } from '@/lib/authErrors'
 
 const OTP_LENGTH = 6
 
@@ -66,7 +67,7 @@ export default function VerifyEmail() {
         navigate('/login', { replace: true })
         return
       }
-      setError(isNetworkError(err) ? 'Check your connection and try again.' : err.message)
+      setError(friendlyAuthError(err))
       return
     }
     setResent(true)
@@ -88,7 +89,7 @@ export default function VerifyEmail() {
     })
     setBusy(false)
     if (error) {
-      setError(isNetworkError(error) ? 'Check your connection and try again.' : error.message)
+      setError(friendlyAuthError(error))
       return
     }
     // Email verified. Next step: verify the phone with the WhatsApp code.

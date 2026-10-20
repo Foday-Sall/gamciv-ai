@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { supabase, getProfile, routeByRole, STAFF_DASHBOARD_URL } from '@/lib/supabase'
+import { friendlyAuthError } from '@/lib/authErrors'
 import GamCivMark from '@/components/GamCivMark'
 import { Button } from '@/components/ui/button'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
@@ -117,26 +118,6 @@ function FieldWithIcon({
   )
 }
 
-/** Map GoTrue errors to sentences that tell the person what to do. */
-function authErrorText(message: string): string {
-  const m = message.toLowerCase()
-  if (m.includes('invalid login credentials'))
-    return 'Wrong email or password. Check them and try again.'
-  if (m.includes('email not confirmed'))
-    return 'This email has not been confirmed yet. Check your inbox for the confirmation link.'
-  if (m.includes('user already registered') || m.includes('already been registered'))
-    return 'An account with this email already exists. Sign in instead.'
-  if (m.includes('password') && (m.includes('short') || m.includes('least') || m.includes('weak')))
-    return 'That password is too short. Use at least 6 characters.'
-  if (m.includes('rate limit') || m.includes('too many'))
-    return 'Too many attempts. Wait a minute and try again.'
-  if (m.includes('unable to validate email') || m.includes('invalid email'))
-    return 'That email address does not look right. Check it and try again.'
-  if (m.includes('signup requires a valid password'))
-    return 'Enter a password of at least 6 characters.'
-  return message
-}
-
 export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin' }) {
   const [mode, setMode] = useState<'signup' | 'signin'>(initialMode)
   const [name, setName] = useState('')
@@ -162,7 +143,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
       setError(
         oauthCode === 'bad_oauth_state' || /state|expired/i.test(oauthError)
           ? 'Sign-in timed out before Google confirmed it. Try again.'
-          : oauthError,
+          : friendlyAuthError(oauthError),
       )
       // Clean the OAuth error params out of the address bar. The app is
       // browser-routed, so keep the pathname and drop only the error query
@@ -220,7 +201,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
           options: { data: { full_name: name.trim() } },
         })
         if (error) {
-          setError(authErrorText(error.message))
+          setError(friendlyAuthError(error))
           return
         }
         if (data.session) {
@@ -259,7 +240,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
             })
             return
           }
-          setError(authErrorText(error.message))
+          setError(friendlyAuthError(error))
           return
         }
         // Role-aware routing: staff belong in the dashboard, citizens stay
@@ -276,6 +257,10 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
           navigate(unconfirmed ? '/verify/email' : '/home', { replace: true })
         }
       }
+    } catch (err) {
+      // signUp/signInWithPassword only reject on network failure (the library
+      // returns HTTP errors as `error` objects); say so plainly.
+      setError(friendlyAuthError(err))
     } finally {
       setBusy(null)
     }
@@ -291,12 +276,12 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
         options: { redirectTo },
       })
       if (error) {
-        setError(authErrorText(error.message))
+        setError(friendlyAuthError(error))
         setBusy(null)
       }
       // On success the library assigns the browser to the Google authorize URL.
     } catch {
-      setError('Could not start Google sign-in. Check your connection and try again.')
+      setError(friendlyAuthError(new TypeError('Failed to fetch')))
       setBusy(null)
     }
   }
