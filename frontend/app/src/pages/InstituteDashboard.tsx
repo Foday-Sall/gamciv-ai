@@ -49,7 +49,6 @@ import {
   officerRequestInfo,
   officerSetStatus,
   officerAttachProof,
-  officerForward,
   type InstituteUser,
   type InstituteDashboardStats,
   getInstituteDashboardStats,
@@ -125,9 +124,8 @@ export default function InstituteDashboard() {
   const [filter, setFilter] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
   const [dashboardStats, setDashboardStats] = useState<InstituteDashboardStats | null>(null)
-  const [institutions, setInstitutions] = useState<
-    Array<{ id: string; name: string; logo: string | null }>
-  >([])
+  const [statsUnavailable, setStatsUnavailable] = useState(false)
+  const [institutionLogo, setInstitutionLogo] = useState<string | null>(null)
   const staffRef = useRef<InstituteUser | null>(null)
   const lastLoadedInstRef = useRef<string | null>(null)
 
@@ -190,7 +188,16 @@ export default function InstituteDashboard() {
     if (lastLoadedInstRef.current === staff.institutionId) return
     lastLoadedInstRef.current = staff.institutionId
     void loadFeed(staff.institutionId)
-    void getInstituteDashboardStats().then(setDashboardStats)
+    void getInstituteDashboardStats()
+      .then((value) => {
+        setDashboardStats(value)
+        setStatsUnavailable(value === null)
+      })
+      .catch((error: unknown) => {
+        console.error('institution dashboard stats request failed:', error)
+        setDashboardStats(null)
+        setStatsUnavailable(true)
+      })
   }, [staff?.institutionId, loadFeed])
 
   // Realtime: new complaints appear live; status changes refresh in place.
@@ -237,19 +244,23 @@ export default function InstituteDashboard() {
     }
   }, [staff?.institutionId])
 
-  // Institutions (name + logo) for the header, row badges and forward targets.
+  // Load only the signed-in officer's institution branding.
   useEffect(() => {
+    const institutionId = staff?.institutionId
+    if (!institutionId) return
     let alive = true
     supabase
       .from('institutions')
-      .select('id, name, logo')
+      .select('logo')
+      .eq('id', institutionId)
+      .maybeSingle()
       .then(({ data }) => {
-        if (alive && data) setInstitutions(data as Array<{ id: string; name: string; logo: string | null }>)
+        if (alive) setInstitutionLogo(data?.logo ?? null)
       })
     return () => {
       alive = false
     }
-  }, [])
+  }, [staff?.institutionId])
 
   const stats = dashboardStats ?? {
     total: rows.length,
@@ -304,7 +315,16 @@ export default function InstituteDashboard() {
         const inst = staffRef.current
         if (inst) {
           void loadFeed(inst.institutionId)
-          void getInstituteDashboardStats().then(setDashboardStats)
+          void getInstituteDashboardStats()
+            .then((value) => {
+              setDashboardStats(value)
+              setStatsUnavailable(value === null)
+            })
+            .catch((error: unknown) => {
+              console.error('institution dashboard stats request failed:', error)
+              setDashboardStats(null)
+              setStatsUnavailable(true)
+            })
         }
       }
     },
@@ -339,14 +359,6 @@ export default function InstituteDashboard() {
     )
   }
 
-  // Logo for the staff's own institution (header + row badges). Falls back to
-  // the GamCiv mark when the institutions row has no logo URL.
-  const ownLogo = institutions.find((i) => i.id === staff.institutionId)?.logo ?? null
-  const logoById = (id: string | null): string | null => {
-    if (!id) return ownLogo
-    return institutions.find((i) => i.id === id)?.logo ?? ownLogo
-  }
-
   const visible = rows.filter((c) => {
     if (!filter.trim()) return true
     const q = filter.trim().toLowerCase()
@@ -362,9 +374,9 @@ export default function InstituteDashboard() {
       <Card className="mb-6 shadow-sm">
         <CardContent className="flex flex-wrap items-center justify-between gap-4 py-5">
           <div className="flex items-center gap-4">
-            {ownLogo ? (
+            {institutionLogo ? (
               <img
-                src={ownLogo}
+                src={institutionLogo}
                 alt={`${staff.institutionName} logo`}
                 className="h-12 w-12 rounded-lg bg-white object-contain p-1 ring-1 ring-border"
               />
@@ -396,14 +408,38 @@ export default function InstituteDashboard() {
         </CardContent>
       </Card>
 
+      {statsUnavailable && (
+        <Card className="mb-4 border-amber-200 bg-amber-50/70">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <p role="status" className="text-sm text-amber-900">
+              Institution analytics are temporarily unavailable. Metrics are shown as unavailable, not as zero.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void getInstituteDashboardStats()
+                  .then((value) => {
+                    setDashboardStats(value)
+                    setStatsUnavailable(value === null)
+                  })
+                  .catch(() => setStatsUnavailable(true))
+              }}
+            >
+              Retry analytics
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Stat cards ──────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Complaints today" value={stats.today} hint="Filed since midnight" />
-        <StatCard label="Open cases" value={stats.open} hint="Not resolved or rejected" />
-        <StatCard label="Resolved this week" value={stats.resolved_week} hint="Resolved in the last 7 days" />
+        <StatCard label="Complaints today" value={dashboardStats?.today ?? '—'} hint="Filed since midnight" />
+        <StatCard label="Open cases" value={dashboardStats?.open ?? '—'} hint="Not resolved or rejected" />
+        <StatCard label="Resolved this week" value={dashboardStats?.resolved_week ?? '—'} hint="Resolved in the last 7 days" />
         <StatCard
           label="Overdue cases"
-          value={stats.overdue}
+          value={dashboardStats?.overdue ?? '—'}
           hint="Past response deadline"
         />
       </div>
@@ -535,15 +571,14 @@ export default function InstituteDashboard() {
               const meta = statusMeta(c.status)
               const busy = busyId === c.id
               const open = OPEN_STATUSES.has(c.status)
-              const rowLogo = logoById(c.institution_id)
               return (
                 <Card key={c.id} className="shadow-sm">
                   <CardHeader className="pb-2">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="flex min-w-0 items-start gap-3">
-                        {rowLogo ? (
+                        {institutionLogo ? (
                           <img
-                            src={rowLogo}
+                            src={institutionLogo}
                             alt=""
                             aria-hidden="true"
                             className="mt-0.5 h-8 w-8 shrink-0 rounded-md bg-white object-contain p-0.5 ring-1 ring-border"
@@ -647,24 +682,6 @@ export default function InstituteDashboard() {
                             onClick={() => void runAction(c.id, () => officerAttachProof(c.id))}
                           >
                             Attach proof
-                          </Button>
-                        )}
-                        {open && c.status !== 'forwarded' && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              void runAction(c.id, () =>
-                                officerForward(
-                                  c.id,
-                                  institutions
-                                    .filter((i) => i.id !== staff.institutionId)
-                                    .map((i) => ({ id: i.id, name: i.name })),
-                                ),
-                              )
-                            }
-                          >
-                            Forward
                           </Button>
                         )}
                       </>
