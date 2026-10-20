@@ -4,9 +4,11 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  Eye,
   FolderOpen,
   Inbox,
   LogOut,
+  MapPin,
   RefreshCw,
   Search,
   TrendingUp,
@@ -38,6 +40,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
 import { OfficerShell } from "@/components/OfficerShell"
+import { ComplaintsMap } from "@/components/ComplaintsMap"
+import { ComplaintDetailsDialog } from "@/components/ComplaintDetailsDialog"
 import {
   Table,
   TableBody,
@@ -55,6 +59,9 @@ interface ComplaintRow {
   title: string
   status: string
   urgency: string | null
+  region: string | null
+  council_area: string | null
+  ward: string | null
   created_at: string
   updated_at: string | null
 }
@@ -194,7 +201,8 @@ export default function InstitutionDashboard() {
   const [trendRange, setTrendRange] = useState<7 | 14>(14)
   const [showReceived, setShowReceived] = useState(true)
   const [showResolved, setShowResolved] = useState(true)
-  const [activeSection, setActiveSection] = useState<"overview" | "analytics" | "complaints">("overview")
+  const [activeSection, setActiveSection] = useState<"overview" | "map" | "analytics" | "complaints">("overview")
+  const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null)
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
 
   useEffect(() => {
@@ -210,7 +218,7 @@ export default function InstitutionDashboard() {
   }, [])
 
   useEffect(() => {
-    const sections = ["overview", "analytics", "complaints"]
+    const sections = ["overview", "map", "analytics", "complaints"]
       .map((id) => document.getElementById(id))
       .filter((section): section is HTMLElement => section !== null)
     if (!sections.length || !("IntersectionObserver" in window)) return
@@ -219,7 +227,7 @@ export default function InstitutionDashboard() {
         .filter((entry) => entry.isIntersecting)
         .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
       const sectionId = visible?.target.id
-      if (sectionId === "overview" || sectionId === "analytics" || sectionId === "complaints") {
+      if (sectionId === "overview" || sectionId === "map" || sectionId === "analytics" || sectionId === "complaints") {
         setActiveSection(sectionId)
       }
     }, { rootMargin: "-140px 0px -55% 0px", threshold: [0, 0.15, 0.4] })
@@ -236,7 +244,7 @@ export default function InstitutionDashboard() {
         Promise.all([
           supabase
             .from("complaints")
-            .select("id, institution_id, tracking_no, title, status, urgency, created_at, updated_at")
+            .select("id, institution_id, tracking_no, title, status, urgency, region, council_area, ward, created_at, updated_at")
             .eq("institution_id", institutionId)
             .order("created_at", { ascending: false })
             .limit(200)
@@ -303,61 +311,40 @@ export default function InstitutionDashboard() {
         setCheckingAccess(false)
         return
       }
-      const user = sessionData.session?.user
-      if (!user) {
-        window.location.href = "/dashboard/login"
+      if (!sessionData.session) {
+        window.location.replace("/app/login")
         return
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle()
+      const { data: accessData, error: accessRpcError } = await supabase.rpc("fn_dashboard_access")
       if (cancelled) return
-      if (profileError) {
-        console.error("Dashboard role check failed:", profileError.message)
+      if (accessRpcError) {
+        console.error("Dashboard access check failed:", accessRpcError.message)
         setAccessError("We couldn't confirm your account permissions. Check your connection and retry.")
         setCheckingAccess(false)
         return
       }
-      if (profile?.role === "admin") {
-        window.location.href = "/dashboard/"
+      const access = accessData as {
+        ok?: boolean
+        role?: "admin" | "officer" | "citizen" | null
+        institution?: { id?: string; name?: string } | null
+      } | null
+      if (access?.role === "admin") {
+        window.location.replace("/dash")
         return
       }
-      if (profile?.role !== "officer") {
-        window.location.href = "/app/login"
+      if (!access?.ok || access.role !== "officer") {
+        window.location.replace("/app/home")
         return
       }
-
-      const { data: officer, error: officerError } = await supabase
-        .from("officers")
-        .select("institution_id, is_active, institutions(name)")
-        .eq("user_id", user.id)
-        .maybeSingle()
-      if (cancelled) return
-      if (officerError) {
-        console.error("Officer institution lookup failed:", officerError.message)
-        setAccessError("We couldn't verify your institution assignment. Please retry.")
-        setCheckingAccess(false)
-        return
-      }
-      if (!officer?.institution_id || officer.is_active !== true) {
+      if (!access.institution?.id) {
         setAccessError("This officer account is not linked to an active institution. Contact your administrator.")
         setCheckingAccess(false)
         return
       }
-
-      const linkedInstitution = officer.institutions as
-        | { name?: string }
-        | Array<{ name?: string }>
-        | null
-      const institutionName = Array.isArray(linkedInstitution)
-        ? linkedInstitution[0]?.name
-        : linkedInstitution?.name
       const ownInstitution = {
-        id: officer.institution_id as string,
-        name: institutionName || "Your institution",
+        id: access.institution.id,
+        name: access.institution.name || "Your institution",
       }
       setInstitution(ownInstitution)
       setCheckingAccess(false)
@@ -451,16 +438,29 @@ export default function InstitutionDashboard() {
     return (rows ?? []).filter((row) =>
       row.title.toLowerCase().includes(query) ||
       row.tracking_no.toLowerCase().includes(query) ||
-      row.status.toLowerCase().includes(query),
+      row.status.toLowerCase().includes(query) ||
+      (row.council_area ?? "").toLowerCase().includes(query) ||
+      (row.region ?? "").toLowerCase().includes(query),
     )
   }, [filter, rows])
 
+  const attentionRows = useMemo(() => {
+    const urgencyRank: Record<string, number> = { critical: 0, high: 1, normal: 2, low: 3 }
+    return (rows ?? [])
+      .filter((row) => !["resolved", "closed", "rejected"].includes(row.status))
+      .sort((a, b) => {
+        const priority = (urgencyRank[a.urgency ?? "normal"] ?? 2) - (urgencyRank[b.urgency ?? "normal"] ?? 2)
+        return priority || new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      })
+      .slice(0, 5)
+  }, [rows])
+
   async function signOut() {
     await supabase.auth.signOut()
-    window.location.href = "/dashboard/login"
+    window.location.href = "/app/login"
   }
 
-  function goToSection(section: "overview" | "analytics" | "complaints") {
+  function goToSection(section: "overview" | "map" | "analytics" | "complaints") {
     document.getElementById(section)?.scrollIntoView({
       behavior: prefersReducedMotion ? "auto" : "smooth",
       block: "start",
@@ -609,6 +609,66 @@ export default function InstitutionDashboard() {
         {statCards.map((item) => (
           <StatCard key={item.label} {...item} />
         ))}
+      </section>
+
+      <section id="map" className="mt-6 scroll-mt-24" aria-labelledby="complaint-map-heading">
+        <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.6fr)_minmax(290px,0.8fr)]">
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <CardTitle id="complaint-map-heading" className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-primary" aria-hidden="true" /> Reports across The Gambia
+              </CardTitle>
+              <CardDescription>Explore location-tagged cases assigned to your institution. Select a marker to open the report.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-3 pt-0 sm:p-5 sm:pt-0">
+              <ComplaintsMap
+                heightClass="h-[360px] sm:h-[470px]"
+                onSelectComplaint={setSelectedComplaintId}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock3 className="h-5 w-5 text-warn" aria-hidden="true" /> Needs attention
+              </CardTitle>
+              <CardDescription>Open reports ordered by urgency, then by age.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {attentionRows.length ? attentionRows.map((complaint) => (
+                <button
+                  key={complaint.id}
+                  type="button"
+                  onClick={() => setSelectedComplaintId(complaint.id)}
+                  aria-label={`Open details for ${complaint.tracking_no}: ${complaint.title}`}
+                  className="group w-full rounded-lg border border-border p-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-mono text-xs text-muted-foreground">{complaint.tracking_no}</span>
+                    <Badge variant={complaint.urgency === "critical" || complaint.urgency === "high" ? "danger" : "outline"}>
+                      {formatLabel(complaint.urgency || "normal")}
+                    </Badge>
+                  </div>
+                  <span className="mt-2 block line-clamp-2 text-sm font-medium group-hover:text-primary">{complaint.title}</span>
+                  <span className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
+                      <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      {complaint.council_area || complaint.ward || complaint.region || "Location not provided"}
+                    </span>
+                    <span className="shrink-0">{timeAgo(complaint.created_at)}</span>
+                  </span>
+                </button>
+              )) : (
+                <div className="flex min-h-36 flex-col items-center justify-center rounded-lg border border-dashed border-border px-4 text-center">
+                  <CheckCircle2 className="h-7 w-7 text-ok" aria-hidden="true" />
+                  <p className="mt-2 text-sm font-medium">{dataLoading ? "Loading open reports…" : "No open reports need attention"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">New cases assigned to your institution will appear here.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </section>
 
       <section id="analytics" className="mt-6 scroll-mt-32" aria-label="Complaint analytics and service demand">
@@ -783,7 +843,7 @@ export default function InstitutionDashboard() {
             <Input
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
-              placeholder="Search by reference, title, or status"
+              placeholder="Search reference, title, status, or area"
               className="pl-9"
               aria-label="Search this institution's complaints"
             />
@@ -808,10 +868,12 @@ export default function InstitutionDashboard() {
                 <TableRow>
                   <TableHead>Reference</TableHead>
                   <TableHead>Issue</TableHead>
+                  <TableHead>Area</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Priority</TableHead>
                   <TableHead>Received</TableHead>
-                  <TableHead className="text-right">Last updated</TableHead>
+                  <TableHead>Updated</TableHead>
+                  <TableHead className="text-right">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -820,6 +882,9 @@ export default function InstitutionDashboard() {
                     <TableCell className="whitespace-nowrap font-mono text-xs">{complaint.tracking_no}</TableCell>
                     <TableCell className="max-w-[360px]">
                       <span className="block truncate font-medium">{complaint.title}</span>
+                    </TableCell>
+                    <TableCell className="max-w-40 truncate text-sm text-muted-foreground">
+                      {complaint.council_area || complaint.ward || complaint.region || "Not provided"}
                     </TableCell>
                     <TableCell>
                       <Badge variant={statusBadgeVariant(complaint.status)}>{formatLabel(complaint.status)}</Badge>
@@ -836,8 +901,13 @@ export default function InstitutionDashboard() {
                       </Badge>
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{timeAgo(complaint.created_at)}</TableCell>
-                    <TableCell className="whitespace-nowrap text-right text-sm text-muted-foreground">
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                       {complaint.updated_at ? timeAgo(complaint.updated_at) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="outline" onClick={() => setSelectedComplaintId(complaint.id)}>
+                        <Eye className="mr-2 h-3.5 w-3.5" aria-hidden="true" /> View report
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -846,8 +916,8 @@ export default function InstitutionDashboard() {
           </div>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-5 py-3 text-xs text-muted-foreground sm:px-6">
-          <span>Showing {visibleRows.length} of the 200 most recent records.</span>
-          <span className="inline-flex items-center gap-1.5"><TrendingUp className="h-3.5 w-3.5" aria-hidden="true" /> Analytics include all institution records.</span>
+          <span>Showing {visibleRows.length} of up to 200 newest reports.</span>
+          <span className="inline-flex items-center gap-1.5"><TrendingUp className="h-3.5 w-3.5" aria-hidden="true" /> Analytics cover all reports assigned here.</span>
         </div>
       </Card>
 
@@ -855,6 +925,10 @@ export default function InstitutionDashboard() {
         Complaint records and analytics are limited to {institution?.name ?? "your institution"}.
       </p>
       </section>
+      <ComplaintDetailsDialog
+        complaintId={selectedComplaintId}
+        onOpenChange={(open) => { if (!open) setSelectedComplaintId(null) }}
+      />
     </OfficerShell>
   )
 }

@@ -9,31 +9,23 @@ export const supabase = createClient(url, anonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
-    // Storage key stays the library default, which supabase-js derives from
-    // the Supabase URL (host 'api.pocketsoftware.dev' -> 'sb-api-auth-token').
-    // It is shared with the citizen app ON PURPOSE: both apps live on the
-    // origin gamciv.pocketsoftware.dev, so ONE login covers both. The
-    // dashboard role-gates citizens (StaffGate), so a shared citizen session
-    // only ever opens the citizen app, and a staff login is routed to
-    // /dashboard. Do NOT add a per-app storageKey here without changing the
-    // dashboard too: two keys means staff would have to log in twice.
+    // Keep the library's default storage key so the citizen app and /dash
+    // share one persisted session on this origin. Server-verified role checks
+    // route citizens to the app and the owner or institution staff to /dash.
+    // Do not add a per-app storageKey without changing both clients.
   },
 })
 
 /**
- * Dashboard paths on this same origin (gamciv.pocketsoftware.dev). The
- * dedicated dashboard.pocketsoftware.dev domain is retired: the dashboard
- * app is served from /dashboard/ here, and /app/login is the single login
- * page for everyone. Role decides where a signed-in user lands:
- *   officer -> /dashboard/institute (their institution's dashboard)
- *   admin   -> /dashboard/          (full administrator console)
+ * Dashboard paths on this same origin. /app/login is the single login page;
+ * the server-verified role decides which workspace appears at /dash.
  */
-export const STAFF_DASHBOARD_URL = 'https://gamciv.pocketsoftware.dev/dashboard/'
-export const OFFICER_DASHBOARD_URL = 'https://gamciv.pocketsoftware.dev/dashboard/institute'
+export const STAFF_DASHBOARD_URL = 'https://gamciv.pocketsoftware.dev/dash'
+export const OFFICER_DASHBOARD_URL = STAFF_DASHBOARD_URL
 
 /**
- * The profiles table is keyed by `user_id` (not `id`) and has no `phone`
- * column: user_id, email, role, full_name, created_at.
+ * The profiles table is keyed by `user_id`; routing reads only the fields
+ * listed below. Reporter contact details are fetched through an authorized RPC.
  */
 export type Profile = {
   user_id: string
@@ -91,24 +83,22 @@ export async function handleAuthExpired(): Promise<void> {
 }
 
 /**
- * Route the signed-in user to the right place for their role.
- * /app/login is the single login page for everyone; the role decides where
- * they land (same origin, so the session carries over):
- *   officer -> /dashboard/institute (their institution's dashboard)
- *   admin   -> /dashboard/          (full administrator console)
- * Staff get a full navigation so we leave the app entirely. Citizens and
- * unknown-role users stay here.
- * Returns the profile's role (or null when the lookup failed).
+ * Resolve role and institution scope through the server-side allowlist.
+ * Both the owner and institution staff use the same persisted Supabase session
+ * and land at /dash; the dashboard server decides which workspace to render.
  */
-export async function routeByRole(userId: string): Promise<'citizen' | 'officer' | 'admin' | null> {
-  const profile = await getProfile(userId)
-  const role = profile?.role
+export async function routeByRole(): Promise<'citizen' | 'officer' | 'admin' | null> {
+  const { data, error } = await supabase.rpc('fn_dashboard_access')
+  if (error) throw error
+  const access = data as { ok?: boolean; role?: 'citizen' | 'officer' | 'admin' | null } | null
+  if (!access?.ok) return null
+  const role = access.role
   if (role === 'officer') {
-    window.location.href = OFFICER_DASHBOARD_URL
+    window.location.replace(OFFICER_DASHBOARD_URL)
     return 'officer'
   }
   if (role === 'admin') {
-    window.location.href = STAFF_DASHBOARD_URL
+    window.location.replace(STAFF_DASHBOARD_URL)
     return 'admin'
   }
   return role === 'citizen' ? 'citizen' : null

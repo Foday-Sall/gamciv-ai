@@ -7,6 +7,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   LogOut,
+  Map,
   Menu,
   RefreshCw,
 } from "lucide-react"
@@ -18,7 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 
-type OfficerSection = "overview" | "analytics" | "complaints"
+type OfficerSection = "overview" | "map" | "analytics" | "complaints"
 
 const sections: Array<{
   id: OfficerSection
@@ -26,9 +27,10 @@ const sections: Array<{
   description: string
   Icon: typeof LayoutDashboard
 }> = [
-  { id: "overview", label: "Dashboard", description: "Live workload overview", Icon: LayoutDashboard },
-  { id: "analytics", label: "Analytics", description: "Trends and service demand", Icon: ChartNoAxesCombined },
-  { id: "complaints", label: "Complaint queue", description: "Review and triage reports", Icon: ClipboardList },
+  { id: "overview", label: "Dashboard", description: "New, open, overdue and resolved reports", Icon: LayoutDashboard },
+  { id: "map", label: "Complaint map", description: "Locations across The Gambia", Icon: Map },
+  { id: "complaints", label: "Complaint queue", description: "Review cases and contact reporters", Icon: ClipboardList },
+  { id: "analytics", label: "Service trends", description: "Category, status and weekly trends", Icon: ChartNoAxesCombined },
 ]
 
 export function OfficerShell({

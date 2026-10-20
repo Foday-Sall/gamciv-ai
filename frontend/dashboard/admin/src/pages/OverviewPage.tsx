@@ -10,13 +10,15 @@ import {
   Tooltip,
   LineChart,
   Line,
-  Legend,
 } from "recharts"
 import { Inbox, FolderOpen, ArrowUpRight, Timer } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PageHeader } from "@/components/PageHeader"
 import { AnimatedNumber } from "@/components/AnimatedNumber"
+import { ComplaintsMap } from "@/components/ComplaintsMap"
+import { ComplaintDetailsDialog } from "@/components/ComplaintDetailsDialog"
 import { getOverviewStats, type OverviewStats } from "@/lib/adminApi"
 
 const containerVariants: Variants = {
@@ -38,23 +40,43 @@ const STAT_META = [
 
 export default function OverviewPage() {
   const [stats, setStats] = useState<OverviewStats | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [retry, setRetry] = useState(0)
+  const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     getOverviewStats().then((data) => {
-      if (!cancelled) setStats(data)
+      if (!cancelled) {
+        setStats(data)
+        setLoadError(false)
+      }
+    }).catch(() => {
+      if (!cancelled) setLoadError(true)
     })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [retry])
 
   return (
     <div>
       <PageHeader
         title="Overview"
-        description="Complaint volume and response performance across every institution."
+        description="Live complaint workload, service response and report locations across The Gambia."
       />
+
+      {loadError ? (
+        <Card className="mt-6 border-destructive/30" role="alert">
+          <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium">Live overview data is unavailable</p>
+              <p className="mt-1 text-sm text-muted-foreground">We couldn’t load the secured administrator statistics. No sample numbers are being shown.</p>
+            </div>
+            <Button variant="outline" onClick={() => setRetry((value) => value + 1)}>Try again</Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {!stats ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -97,6 +119,19 @@ export default function OverviewPage() {
           ))}
         </motion.div>
       )}
+
+      <Card className="mt-6 overflow-hidden">
+        <CardHeader>
+          <CardTitle>Reports across The Gambia</CardTitle>
+          <CardDescription>All non-sensitive, location-tagged reports. Select a marker to inspect a case.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-3 pt-0 sm:p-5 sm:pt-0">
+          <ComplaintsMap
+            heightClass="h-[360px] sm:h-[470px]"
+            onSelectComplaint={setSelectedComplaintId}
+          />
+        </CardContent>
+      </Card>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <motion.div variants={itemVariants} initial="hidden" animate="shown">
@@ -146,8 +181,8 @@ export default function OverviewPage() {
         <motion.div variants={itemVariants} initial="hidden" animate="shown">
           <Card>
             <CardHeader>
-              <CardTitle>Receipts vs resolutions</CardTitle>
-              <CardDescription>Daily totals for the last 14 days</CardDescription>
+              <CardTitle>Reports received each day</CardTitle>
+              <CardDescription>Live daily intake totals for the last 14 days</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-80 w-full">
@@ -172,23 +207,13 @@ export default function OverviewPage() {
                           fontSize: 12,
                         }}
                       />
-                      <Legend wrapperStyle={{ fontSize: 12, color: "rgb(138, 148, 166)" }} iconType="plainline" />
                       <Line
                         type="monotone"
                         dataKey="received"
-                        name="Received"
+                        name="Reports received"
                         stroke="rgb(79, 143, 217)"
                         strokeWidth={2.5}
                         dot={{ r: 2.5, fill: "rgb(79, 143, 217)", strokeWidth: 0 }}
-                        activeDot={{ r: 4 }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="resolved"
-                        name="Resolved"
-                        stroke="rgb(47, 158, 110)"
-                        strokeWidth={2.5}
-                        dot={{ r: 2.5, fill: "rgb(47, 158, 110)", strokeWidth: 0 }}
                         activeDot={{ r: 4 }}
                       />
                     </LineChart>
@@ -201,6 +226,10 @@ export default function OverviewPage() {
           </Card>
         </motion.div>
       </div>
+      <ComplaintDetailsDialog
+        complaintId={selectedComplaintId}
+        onOpenChange={(open) => { if (!open) setSelectedComplaintId(null) }}
+      />
     </div>
   )
 }

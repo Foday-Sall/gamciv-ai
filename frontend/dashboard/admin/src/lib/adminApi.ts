@@ -1,9 +1,7 @@
-// Admin API client.
-//
-// All data below is clearly-labeled MOCK data with realistic values.
-// TODO: replace mock returns with real backend RPC calls. The planned
-// procedure names for each function are noted at its site below, so the
-// swap is mechanical once the backend admin-api lands.
+// Admin API client. The overview uses a live, server-authorized Supabase RPC;
+// several legacy admin-management pages below still contain prototype data.
+
+import { supabase } from "@/lib/secretsClient"
 
 export type InstitutionStatus = "active" | "suspended"
 
@@ -65,7 +63,7 @@ export interface OverviewStats {
   escalatedToday: number
   avgFirstResponseHours: number
   complaintsByCategory: { category: string; count: number }[]
-  last14Days: { date: string; received: number; resolved: number }[]
+  last14Days: { date: string; received: number }[]
 }
 
 export interface AdminSettings {
@@ -376,40 +374,6 @@ const AUDIT_LOG: AuditEntry[] = [
   },
 ]
 
-const OVERVIEW: OverviewStats = {
-  totalComplaints: 1284,
-  openComplaints: 192,
-  escalatedToday: 6,
-  avgFirstResponseHours: 4.2,
-  complaintsByCategory: [
-    { category: "Water", count: 318 },
-    { category: "Roads", count: 276 },
-    { category: "Electricity", count: 231 },
-    { category: "Sanitation", count: 187 },
-    { category: "Taxes", count: 102 },
-    { category: "Environment", count: 84 },
-    { category: "Police", count: 48 },
-    { category: "Fire", count: 21 },
-    { category: "Consumer", count: 17 },
-  ],
-  last14Days: [
-    { date: "Oct 05", received: 24, resolved: 19 },
-    { date: "Oct 06", received: 31, resolved: 22 },
-    { date: "Oct 07", received: 28, resolved: 26 },
-    { date: "Oct 08", received: 35, resolved: 24 },
-    { date: "Oct 09", received: 42, resolved: 30 },
-    { date: "Oct 10", received: 38, resolved: 33 },
-    { date: "Oct 11", received: 29, resolved: 27 },
-    { date: "Oct 12", received: 33, resolved: 28 },
-    { date: "Oct 13", received: 44, resolved: 31 },
-    { date: "Oct 14", received: 40, resolved: 35 },
-    { date: "Oct 15", received: 47, resolved: 33 },
-    { date: "Oct 16", received: 39, resolved: 36 },
-    { date: "Oct 17", received: 51, resolved: 38 },
-    { date: "Oct 18", received: 46, resolved: 41 },
-  ],
-}
-
 const SETTINGS: AdminSettings = {
   escalationThresholds: {
     critical: 4,
@@ -435,8 +399,36 @@ function createAccountId(): string {
 }
 
 export async function getOverviewStats(): Promise<OverviewStats> {
-  // TODO: real RPC name: getOverviewStats
-  return { ...OVERVIEW }
+  const { data, error } = await supabase.rpc("admin_get_overview_stats")
+  if (error) throw error
+  const result = data as {
+    ok?: boolean
+    error?: string
+    total?: number | string
+    open?: number | string
+    escalated_today?: number | string
+    avg_first_response_minutes?: number | string
+    per_category?: Array<{ category?: string; count?: number | string }>
+    daily?: Array<{ date?: string; count?: number | string }>
+  } | null
+  if (!result?.ok) throw new Error(result?.error || "Overview data is unavailable")
+
+  return {
+    totalComplaints: Number(result.total ?? 0),
+    openComplaints: Number(result.open ?? 0),
+    escalatedToday: Number(result.escalated_today ?? 0),
+    avgFirstResponseHours: Number(result.avg_first_response_minutes ?? 0) / 60,
+    complaintsByCategory: (result.per_category ?? [])
+      .map((item) => ({ category: item.category || "Uncategorized", count: Number(item.count ?? 0) }))
+      .sort((a, b) => b.count - a.count),
+    last14Days: (result.daily ?? []).map((item) => ({
+      date: item.date
+        ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" })
+            .format(new Date(`${item.date}T12:00:00Z`))
+        : "—",
+      received: Number(item.count ?? 0),
+    })),
+  }
 }
 
 export async function getInstitutions(): Promise<Institution[]> {

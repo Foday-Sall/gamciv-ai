@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
-import { supabase, getProfile, routeByRole, STAFF_DASHBOARD_URL, OFFICER_DASHBOARD_URL } from '@/lib/supabase'
+import { supabase, routeByRole } from '@/lib/supabase'
 import { friendlyAuthError } from '@/lib/authErrors'
 import GamCivMark from '@/components/GamCivMark'
+import { StaffOtpSignIn } from '@/components/StaffOtpSignIn'
 import { Button } from '@/components/ui/button'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Label } from '@/components/ui/label'
@@ -156,23 +157,21 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
     }
   }, [location.key])
 
-  // A staff member who lands on this login page with an existing session
-  // belongs in the dashboard (officers to their institution's dashboard,
-  // admins to the console); a signed-in citizen continues into the app.
-  // Runs once on mount. Staff: full navigation keeps the session intact.
+  // Everyone signs in here. The server decides whether the session belongs
+  // to a citizen, institution staff member, or the sole administrator.
   useEffect(() => {
     let cancelled = false
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (cancelled || !session) return
-      const role = await getProfile(session.user.id).then((p) => p?.role)
+      const role = await routeByRole()
       if (cancelled) return
-      if (role === 'officer') {
-        window.location.href = OFFICER_DASHBOARD_URL
-      } else if (role === 'admin') {
-        window.location.href = STAFF_DASHBOARD_URL
-      } else if (role === 'citizen') {
+      if (role === 'citizen') {
         navigate('/home', { replace: true })
+      } else if (!role) {
+        setError('We could not confirm that this account is enabled for GamCiv. Contact the platform administrator.')
       }
+    }).catch(() => {
+      if (!cancelled) setError('We could not verify your account. Check your connection and try again.')
     })
     return () => {
       cancelled = true
@@ -213,7 +212,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
           })
           // New signups are citizens by default (the signup trigger sets the
           // role), but respect the actual profile role just in case.
-          const routed = await routeByRole(data.session.user.id)
+          const routed = await routeByRole()
           if (routed !== 'officer' && routed !== 'admin') {
             // New accounts must confirm their email (OTP) before using the app.
             navigate('/verify/email', { replace: true })
@@ -250,9 +249,13 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
         // here. Unknown role (profile lookup failed) stays too — do not trap
         // a citizen out of the app over a transient error.
         const routed = loginData.session
-          ? await routeByRole(loginData.session.user.id)
+          ? await routeByRole()
           : null
-        if (routed !== 'officer' && routed !== 'admin') {
+        if (routed === null) {
+          setError('This account is not enabled for GamCiv access. Contact the platform administrator.')
+          return
+        }
+        if (routed === 'citizen') {
           // Unconfirmed email? Send to the OTP verification screen first.
           const unconfirmed =
             loginData.session?.user?.email_confirmed_at == null &&
@@ -304,7 +307,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
             <p className="mt-2 max-w-sm text-muted-foreground">
               {isSignup
                 ? 'Create a free account to report public problems and follow them until they are fixed.'
-                : 'Sign in to follow the reports you have filed.'}
+                : 'Sign in as a citizen or institution staff member to open your GamCiv workspace.'}
             </p>
           </div>
 
@@ -370,6 +373,8 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
               </Button>
             )}
           </form>
+
+          {!isSignup && <StaffOtpSignIn email={email} />}
 
           <div className="my-6 flex items-center gap-3">
             <Separator className="flex-1" />

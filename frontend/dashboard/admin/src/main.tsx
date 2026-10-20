@@ -1,57 +1,66 @@
-import { StrictMode } from "react"
+import { StrictMode, Suspense, lazy, useEffect } from "react"
 import { createRoot } from "react-dom/client"
-import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { BrowserRouter, Navigate, Route, Routes, useOutletContext } from "react-router-dom"
+import { Loader2 } from "lucide-react"
 import { AdminLayout } from "@/layouts/AdminLayout"
-import LoginPage from "@/pages/LoginPage"
-import InstitutionDashboard from "@/pages/InstitutionDashboard"
-import OverviewPage from "@/pages/OverviewPage"
-import InstitutionsPage from "@/pages/InstitutionsPage"
-import AccountsPage from "@/pages/AccountsPage"
-import AccessControlPage from "@/pages/AccessControlPage"
-import AuditLogPage from "@/pages/AuditLogPage"
-import SettingsPage from "@/pages/SettingsPage"
-import WhatsappNumbersPage from "@/pages/WhatsappNumbersPage"
-import { NotScheduledPage } from "@/pages/NotScheduledPage"
+import type { DashRole } from "@/lib/authGate"
+import "leaflet/dist/leaflet.css"
 import "@/index.css"
 
-/**
- * Dashboard routes.
- *
- *   /login      -> the dashboard's own login screen (OTP code + password
- *                  fallback). Unauthenticated visitors land here and see
- *                  nothing else: every data view is behind the gate.
- *   /institute  -> role=officer view (own-institution complaints, RLS-scoped
- *                  by comp_select_officer_own_inst).
- *   /           -> role=admin view (the full administrator console, gated in
- *                  AdminLayout).
- *
- * The gate lives in AdminLayout (session + profile role check): admins see
- * the console, officers are routed to /institute, signed-out visitors are
- * routed to /login. Unauthenticated users never see dashboard data because
- * every page is a child of the gated layout (and the REST reads return
- * zero rows for the anon key).
- */
-function AdminLayoutGate() {
-  return <AdminLayout officerPath="/institute" loginPath="/login" />
+const InstitutionDashboard = lazy(() => import("@/pages/InstitutionDashboard"))
+const OverviewPage = lazy(() => import("@/pages/OverviewPage"))
+const InstitutionsPage = lazy(() => import("@/pages/InstitutionsPage"))
+const AccountsPage = lazy(() => import("@/pages/AccountsPage"))
+const AccessControlPage = lazy(() => import("@/pages/AccessControlPage"))
+const AuditLogPage = lazy(() => import("@/pages/AuditLogPage"))
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"))
+const WhatsappNumbersPage = lazy(() => import("@/pages/WhatsappNumbersPage"))
+const NotScheduledPage = lazy(() => import("@/pages/NotScheduledPage").then((module) => ({ default: module.NotScheduledPage })))
+
+function PageLoading() {
+  return (
+    <main className="flex min-h-[50vh] items-center justify-center text-muted-foreground" role="status" aria-busy="true">
+      <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+      <span className="sr-only">Loading dashboard page</span>
+    </main>
+  )
+}
+
+function SharedLoginRedirect() {
+  useEffect(() => {
+    window.location.replace("/app/login")
+  }, [])
+  return <main className="flex min-h-screen items-center justify-center text-sm text-muted-foreground" role="status">Opening GamCiv sign in…</main>
+}
+
+function DashboardHome() {
+  const { role } = useOutletContext<{ role: DashRole }>()
+  return role === "officer" ? <InstitutionDashboard /> : <OverviewPage />
+}
+
+function ProtectedDashboard() {
+  return <AdminLayout />
 }
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter basename="/dashboard">
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/institute" element={<InstitutionDashboard />} />
-        <Route element={<AdminLayoutGate />}>
-          <Route index element={<OverviewPage />} />
-          <Route path="/institutions" element={<InstitutionsPage />} />
-          <Route path="/accounts" element={<AccountsPage />} />
-          <Route path="/access-control" element={<AccessControlPage />} />
-          <Route path="/audit-log" element={<AuditLogPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/whatsapp-numbers" element={<WhatsappNumbersPage />} />
-          <Route path="*" element={<NotScheduledPage />} />
-        </Route>
-      </Routes>
+    <BrowserRouter basename="/dash">
+      <Suspense fallback={<PageLoading />}>
+        <Routes>
+          <Route path="/login" element={<SharedLoginRedirect />} />
+          <Route element={<ProtectedDashboard />}>
+            <Route index element={<DashboardHome />} />
+            <Route path="institute" element={<Navigate to="/" replace />} />
+            <Route path="institutions" element={<InstitutionsPage />} />
+            <Route path="accounts" element={<AccountsPage />} />
+            <Route path="access-control" element={<AccessControlPage />} />
+            <Route path="audit-log" element={<AuditLogPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="whatsapp-numbers" element={<WhatsappNumbersPage />} />
+            <Route path="*" element={<NotScheduledPage />} />
+          </Route>
+        </Routes>
+      </Suspense>
     </BrowserRouter>
-  </StrictMode>
+  </StrictMode>,
 )

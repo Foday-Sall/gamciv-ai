@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import AppShell from '@/components/AppShell'
@@ -10,7 +11,6 @@ import Report from '@/pages/Report'
 import Track from '@/pages/Track'
 import Profile from '@/pages/Profile'
 import MyReports from '@/pages/MyReports'
-import InstituteDashboard from '@/pages/InstituteDashboard'
 import VerifyEmail from '@/pages/VerifyEmail'
 import VerifyPhone from '@/pages/VerifyPhone'
 
@@ -18,6 +18,13 @@ import VerifyPhone from '@/pages/VerifyPhone'
 function PositionedToaster() {
   const isDesktop = useIsDesktop()
   return <Toaster position={isDesktop ? 'bottom-right' : 'top-center'} />
+}
+
+function LegacyInstitutionRedirect() {
+  useEffect(() => {
+    window.location.replace('/dash')
+  }, [])
+  return <main className="flex min-h-screen items-center justify-center text-sm text-muted-foreground" role="status">Opening your dashboard…</main>
 }
 
 export default function App() {
@@ -41,7 +48,7 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<HomeGate />} />
-          <Route path="/institute" element={<InstituteDashboard />} />
+          <Route path="/institute" element={<LegacyInstitutionRedirect />} />
           <Route path="/report" element={<Report />} />
           <Route path="/track" element={<Track />} />
           <Route path="/profile" element={<Profile />} />

@@ -1,72 +1,87 @@
 import { useEffect, useState } from "react"
-import { Outlet, useNavigate } from "react-router-dom"
+import { Navigate, Outlet, useLocation } from "react-router-dom"
+import { Loader2, RefreshCw } from "lucide-react"
 import { Toaster } from "@/components/ui/toast"
 import { Sidebar } from "@/components/Sidebar"
 import { Topbar } from "@/components/Topbar"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { resolveSessionRole } from "@/lib/authGate"
-import { Loader2 } from "lucide-react"
+import { resolveSessionRole, type DashRole } from "@/lib/authGate"
 
-/**
- * Route guard for the administrator console.
- *
- *   role = admin   -> console (Outlet)
- *   role = officer -> the institution dashboard at officerPath
- *   no session     -> the dashboard login at loginPath
- *
- * Server-side every admin RPC re-checks fn_is_admin(), and the officer's
- * data read is RLS-scoped by comp_select_officer_own_inst, so this gate only
- * prevents non-admins from staring at a wall of failing requests — it is not
- * the security control itself.
- */
-export function AdminLayout({
-  officerPath = "/institute",
-  loginPath = "/login",
-}: {
-  officerPath?: string
-  loginPath?: string
-}) {
+type GateState =
+  | { status: "checking" }
+  | { status: "error" }
+  | { status: "ready"; role: DashRole }
+
+/** Shared protected route: an institution staff member or the sole admin. */
+export function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [search, setSearch] = useState("")
-  const [checked, setChecked] = useState(false)
-  const navigate = useNavigate()
+  const [retry, setRetry] = useState(0)
+  const [gate, setGate] = useState<GateState>({ status: "checking" })
+  const location = useLocation()
 
   useEffect(() => {
     let cancelled = false
-
-    async function gate() {
-      const info = await resolveSessionRole()
+    setGate({ status: "checking" })
+    void resolveSessionRole().then((info) => {
       if (cancelled) return
       if (!info.session) {
-        // Not signed in: the login screen is all they get.
-        window.location.href = "/dashboard" + loginPath
+        window.location.replace("/app/login")
         return
       }
-      if (info.role === "officer") {
-        window.location.href = "/dashboard" + officerPath
+      if (info.error) {
+        setGate({ status: "error" })
         return
       }
-      if (info.role !== "admin") {
-        // Signed in but not staff (citizen or unknown): citizen app.
-        window.location.href = "/app/login"
+      if (!info.role) {
+        window.location.replace("/app/home")
         return
       }
-      setChecked(true)
-    }
-
-    gate()
+      setGate({ status: "ready", role: info.role })
+    }).catch(() => {
+      if (!cancelled) setGate({ status: "error" })
+    })
     return () => {
       cancelled = true
     }
-  }, [navigate, officerPath, loginPath])
+  }, [retry])
 
-  if (!checked) {
+  if (gate.status === "checking") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
+      <main className="flex min-h-screen items-center justify-center bg-background text-foreground" aria-busy="true">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
-      </div>
+        <span className="sr-only">Verifying dashboard access</span>
+      </main>
     )
+  }
+
+  if (gate.status === "error") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background px-5 text-foreground">
+        <section className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-sm">
+          <h1 className="font-display text-xl font-semibold">Dashboard access unavailable</h1>
+          <p className="mt-2 text-sm text-muted-foreground">We couldn’t verify your session with GamCiv. Check your connection and try again.</p>
+          <Button className="mt-5" onClick={() => setRetry((value) => value + 1)}>
+            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" /> Try again
+          </Button>
+        </section>
+      </main>
+    )
+  }
+
+  // Institution staff always land on the same /dash path; every other console
+  // route is admin-only and redirects them back to their institution workspace.
+  if (gate.role === "officer" && location.pathname !== "/") {
+    return <Navigate to="/" replace />
+  }
+  if (gate.role === "admin" && location.pathname === "/institute") {
+    return <Navigate to="/" replace />
+  }
+
+  if (gate.role === "officer") {
+    return <Outlet context={{ role: gate.role }} />
   }
 
   return (
@@ -77,15 +92,13 @@ export function AdminLayout({
         mobileOpen={mobileOpen}
         onMobileClose={() => setMobileOpen(false)}
       />
-      <div
-        className={cn(
-          "flex min-h-screen flex-col transition-[padding] duration-300",
-          collapsed ? "md:pl-[76px]" : "md:pl-[264px]"
-        )}
-      >
+      <div className={cn(
+        "flex min-h-screen flex-col transition-[padding] duration-300",
+        collapsed ? "md:pl-[76px]" : "md:pl-[264px]",
+      )}>
         <Topbar onMenu={() => setMobileOpen(true)} search={search} onSearchChange={setSearch} />
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 md:px-6">
-          <Outlet />
+          <Outlet context={{ role: gate.role }} />
         </main>
       </div>
       <Toaster />

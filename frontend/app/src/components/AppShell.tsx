@@ -35,7 +35,7 @@ import {
 import { SignOutDialog } from '@/components/ConfirmDialogs'
 import PageTransition from '@/components/PageTransition'
 import { useSession, useDisplayName } from '@/hooks/useSession'
-import { supabase, getProfile, STAFF_DASHBOARD_URL, OFFICER_DASHBOARD_URL } from '@/lib/supabase'
+import { supabase, getProfile, STAFF_DASHBOARD_URL } from '@/lib/supabase'
 import GamCivMark from '@/components/GamCivMark'
 import { toast } from 'sonner'
 
@@ -110,21 +110,23 @@ export default function AppShell() {
     }
   }, [session?.user?.id, sessionLoading, gateRetry, navigate])
 
-  // A signed-in staff member (officer/admin) browsing the citizen app should
-  // be sent to the dashboard: officers to their institution's dashboard,
-  // admins to the console. Runs once per session; no redirect while the
-  // profile lookup fails (do not bounce people over a transient error).
+  // A signed-in staff member or the owner is routed by the server-side
+  // allowlist to the same /dash entry; transient API errors do not redirect.
   useEffect(() => {
     if (!session?.user?.id) return
     let cancelled = false
-    getProfile(session.user.id).then((p) => {
-      if (cancelled) return
-      if (p?.role === 'officer') {
-        window.location.href = OFFICER_DASHBOARD_URL
-      } else if (p?.role === 'admin') {
-        window.location.href = STAFF_DASHBOARD_URL
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc('fn_dashboard_access')
+        if (cancelled || error) return
+        const access = data as { ok?: boolean; role?: string | null } | null
+        if (access?.ok && (access.role === 'officer' || access.role === 'admin')) {
+          window.location.replace(STAFF_DASHBOARD_URL)
+        }
+      } catch {
+        // Stay in the citizen app on a transient role-check failure.
       }
-    })
+    })()
     return () => {
       cancelled = true
     }

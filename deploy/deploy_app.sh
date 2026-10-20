@@ -10,9 +10,9 @@ KEY="${SSH_KEY:?Set SSH_KEY=/path/to/key}"
 HOST="${VPS_HOST:?Set VPS_HOST=root@host}"
 
 tar czf /tmp/gamciv-app.tgz -C $APP/dist .
-scp -q -i $KEY -o StrictHostKeyChecking=no /tmp/gamciv-app.tgz $HOST:/tmp/gamciv-app.tgz
+scp -q -i "$KEY" -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=15 /tmp/gamciv-app.tgz "$HOST:/tmp/gamciv-app.tgz"
 
-ssh -i $KEY -o StrictHostKeyChecking=no $HOST '
+ssh -i "$KEY" -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=15 "$HOST" '
 set -e
 # persistent app tree (outside dist so landing redeploys keep it)
 mkdir -p /opt/gamciv-app && rm -rf /opt/gamciv-app/* && tar xzf /tmp/gamciv-app.tgz -C /opt/gamciv-app && rm /tmp/gamciv-app.tgz
