@@ -66,7 +66,7 @@ export const INSTITUTION_ORDER: InstitutionCode[] = ['KMC', 'NAWEC', 'NRA', 'NEA
 export async function fetchInstitutions(): Promise<InstitutionInfo[]> {
   const { data, error } = await supabase
     .from('institutions')
-    .select('id, code, name, type')
+    .select('id, code, name, type, logo_url')
     .in('code', [...INSTITUTION_ORDER, 'CENTRAL'])
 
   if (error || !data) {
@@ -87,10 +87,17 @@ export async function fetchInstitutions(): Promise<InstitutionInfo[]> {
   }
 
   const byCode = new Map<string, InstitutionInfo>()
-  for (const row of data as Array<{ id: string; code: string; name: string; type: string }>) {
+  for (const row of data as Array<{ id: string; code: string; name: string; type: string; logo_url: string | null }>) {
     const code = row.code as InstitutionCode
     if (!BRAND[code]) continue
-    byCode.set(code, { id: row.id, code, name: row.name, type: row.type, ...BRAND[code] })
+    byCode.set(code, {
+      id: row.id,
+      code,
+      name: row.name,
+      type: row.type,
+      ...BRAND[code],
+      logo: row.logo_url?.trim() || BRAND[code].logo,
+    })
   }
   const ordered: InstitutionInfo[] = INSTITUTION_ORDER.map((c) => byCode.get(c)).filter(
     (v): v is InstitutionInfo => !!v,
@@ -142,14 +149,21 @@ export function categoryIcon(slug: string): string {
 export type CouncilArea = {
   value: string
   label: string
-  lat: number
-  lng: number
+  group: 'municipal' | 'area'
+  region: string
+  lat?: number
+  lng?: number
 }
 
 export const COUNCIL_AREAS: CouncilArea[] = [
-  { value: 'kanifing', label: 'Kanifing (includes Serekunda)', lat: 13.52, lng: -16.69 },
-  { value: 'banjul', label: 'Banjul', lat: 13.454, lng: -16.579 },
-  { value: 'brikama', label: 'Brikama', lat: 13.29, lng: -16.73 },
+  { value: 'banjul', label: 'Banjul City Council (Banjul)', group: 'municipal', region: 'Banjul', lat: 13.454, lng: -16.579 },
+  { value: 'kanifing', label: 'Kanifing Municipal Council (Kanifing)', group: 'municipal', region: 'Kanifing', lat: 13.52, lng: -16.69 },
+  { value: 'brikama', label: 'Brikama Area Council (West Coast Region)', group: 'area', region: 'West Coast Region', lat: 13.29, lng: -16.73 },
+  { value: 'kerewan', label: 'Kerewan Area Council (North Bank Region)', group: 'area', region: 'North Bank Region' },
+  { value: 'mansakonko', label: 'Mansakonko Area Council (Lower River Region)', group: 'area', region: 'Lower River Region' },
+  { value: 'janjanbureh', label: 'Janjanbureh Area Council (Central River Region - South)', group: 'area', region: 'Central River Region - South' },
+  { value: 'kuntaur', label: 'Kuntaur Area Council (Central River Region - North)', group: 'area', region: 'Central River Region - North' },
+  { value: 'basse', label: 'Basse Area Council (Upper River Region)', group: 'area', region: 'Upper River Region' },
 ]
 
 /** Municipal bbox from the institutions table — used to clamp/snap GPS to a council area. */
@@ -197,7 +211,7 @@ export function statusMeta(status: string | null | undefined): {
     case 'waiting_info':
       return { label: 'Waiting for info', variant: 'outline' }
     case 'citizen_confirmation':
-      return { label: 'Confirm fix', variant: 'outline' }
+      return { label: 'Fix reported · confirm', variant: 'outline' }
     case 'forwarded':
       return { label: 'Forwarded', variant: 'secondary' }
     case 'assigned':

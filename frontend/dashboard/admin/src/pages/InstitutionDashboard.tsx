@@ -43,6 +43,7 @@ import { OfficerShell } from "@/components/OfficerShell"
 import { ComplaintsMap } from "@/components/ComplaintsMap"
 import { ComplaintDetailsDialog } from "@/components/ComplaintDetailsDialog"
 import { SignOutConfirmationDialog } from "@/components/SignOutConfirmationDialog"
+import { councilAreaLabel } from "@/lib/councils"
 import {
   Table,
   TableBody,
@@ -69,7 +70,9 @@ interface ComplaintRow {
 
 interface InstitutionInfo {
   id: string
+  code: string
   name: string
+  logo_url: string | null
 }
 
 interface DashboardStats {
@@ -349,7 +352,7 @@ export default function InstitutionDashboard() {
       const access = accessData as {
         ok?: boolean
         role?: "admin" | "officer" | "citizen" | null
-        institution?: { id?: string; name?: string } | null
+        institution?: { id?: string; code?: string; name?: string; logo_url?: string | null } | null
       } | null
       if (access?.role === "admin") {
         window.location.replace("/dash")
@@ -366,7 +369,9 @@ export default function InstitutionDashboard() {
       }
       const ownInstitution = {
         id: access.institution.id,
+        code: access.institution.code || "",
         name: access.institution.name || "Your institution",
+        logo_url: access.institution.logo_url?.trim() || null,
       }
       setInstitution(ownInstitution)
       setCheckingAccess(false)
@@ -603,6 +608,8 @@ export default function InstitutionDashboard() {
     <>
     <OfficerShell
       institutionName={institution?.name ?? "Your institution"}
+      institutionCode={institution?.code ?? null}
+      institutionLogoUrl={institution?.logo_url ?? null}
       activeSection={activeSection}
       onNavigate={goToSection}
       onRefresh={() => institution && void loadDashboard(institution.id)}
@@ -730,7 +737,7 @@ export default function InstitutionDashboard() {
                   <span className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
                       <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                      {complaint.council_area || complaint.ward || complaint.region || "Location not provided"}
+                      {councilAreaLabel(complaint.council_area) || complaint.ward || complaint.region || "Location not provided"}
                     </span>
                     <span className="shrink-0">{timeAgo(complaint.created_at)}</span>
                   </span>
@@ -1013,7 +1020,7 @@ export default function InstitutionDashboard() {
                       <span className="block truncate font-medium">{complaint.title}</span>
                     </TableCell>
                     <TableCell className="max-w-40 truncate text-sm text-muted-foreground">
-                      {complaint.council_area || complaint.ward || complaint.region || "Not provided"}
+                      {councilAreaLabel(complaint.council_area) || complaint.ward || complaint.region || "Not provided"}
                     </TableCell>
                     <TableCell>
                       <Badge variant={statusBadgeVariant(complaint.status)}>{formatLabel(complaint.status)}</Badge>
@@ -1057,6 +1064,7 @@ export default function InstitutionDashboard() {
       <ComplaintDetailsDialog
         complaintId={selectedComplaintId}
         onOpenChange={(open) => { if (!open) setSelectedComplaintId(null) }}
+        onStatusUpdated={() => { if (institution) void loadDashboard(institution.id) }}
       />
     </OfficerShell>
     {signOutDialog}

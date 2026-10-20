@@ -33,8 +33,18 @@ const sections: Array<{
   { id: "analytics", label: "Service trends", description: "Category, status and weekly trends", Icon: ChartNoAxesCombined },
 ]
 
+const OFFICIAL_LOGOS: Record<string, string> = {
+  KMC: "/logos/kmc.png",
+  NAWEC: "/logos/nawec.png",
+  NRA: "/logos/nra.png",
+  NEA: "/logos/nea.png",
+  POLICE: "/logos/police.png",
+}
+
 export function OfficerShell({
   institutionName,
+  institutionCode,
+  institutionLogoUrl,
   activeSection,
   onNavigate,
   onRefresh,
@@ -43,6 +53,8 @@ export function OfficerShell({
   children,
 }: {
   institutionName: string
+  institutionCode: string | null
+  institutionLogoUrl: string | null
   activeSection: OfficerSection
   onNavigate: (section: OfficerSection) => void
   onRefresh: () => void
@@ -53,6 +65,7 @@ export function OfficerShell({
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [manualActiveSection, setManualActiveSection] = useState<OfficerSection | null>(null)
+  const institutionLogo = institutionLogoUrl || (institutionCode ? OFFICIAL_LOGOS[institutionCode.toUpperCase()] : null) || null
 
   useEffect(() => {
     const resumeScrollTracking = () => setManualActiveSection(null)
@@ -125,9 +138,13 @@ export function OfficerShell({
   function Brand({ compact = false }: { compact?: boolean }) {
     return (
       <div className={cn("flex min-w-0 items-center gap-3", compact && "px-4")}>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Building2 className="h-[18px] w-[18px]" aria-hidden="true" />
-        </span>
+        {institutionLogo ? (
+          <img src={institutionLogo} alt={`${institutionName} logo`} className="h-9 w-9 shrink-0 rounded-lg bg-white object-contain p-1" />
+        ) : (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Building2 className="h-[18px] w-[18px]" aria-hidden="true" />
+          </span>
+        )}
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-foreground">GamCiv operations</p>
           <p className="truncate text-xs text-muted-foreground">{institutionName}</p>
@@ -148,9 +165,13 @@ export function OfficerShell({
       >
         <div className={cn("flex h-16 shrink-0 items-center border-b border-border", collapsed ? "justify-center px-3" : "px-5")}>
           {collapsed ? (
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground" title={`GamCiv · ${institutionName}`}>
-              <Building2 className="h-[18px] w-[18px]" aria-hidden="true" />
-            </span>
+            institutionLogo ? (
+              <img src={institutionLogo} alt={`${institutionName} logo`} className="h-9 w-9 rounded-lg bg-white object-contain p-1" title={`GamCiv · ${institutionName}`} />
+            ) : (
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground" title={`GamCiv · ${institutionName}`}>
+                <Building2 className="h-[18px] w-[18px]" aria-hidden="true" />
+              </span>
+            )
           ) : <Brand />}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -193,6 +214,7 @@ export function OfficerShell({
             <Menu className="h-5 w-5" aria-hidden="true" />
           </Button>
           <div className="min-w-0 flex-1 md:hidden">
+            {institutionLogo ? <img src={institutionLogo} alt="" className="mr-2 inline-block h-7 w-7 rounded bg-white object-contain p-0.5 align-middle" /> : null}
             <p className="truncate text-sm font-semibold">GamCiv operations</p>
             <p className="truncate text-xs text-muted-foreground">{institutionName}</p>
           </div>

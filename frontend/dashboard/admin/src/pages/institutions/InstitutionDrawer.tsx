@@ -22,7 +22,7 @@ export default function InstitutionDrawer({
   const uploadLogo = async (file: File) => {
     if (!institution) return
     try {
-      await uploadInstitutionLogo(institution.id, file)
+      await uploadInstitutionLogo(institution.shortCode, file)
       toast({ title: "Logo uploaded", description: `${institution.name} logo is saved.`, variant: "success" })
     } catch (error) {
       toast({

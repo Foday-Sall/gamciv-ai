@@ -46,7 +46,9 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -280,8 +282,8 @@ export default function Report() {
 
   function handlePhoto(file: File | undefined) {
     if (!file) return
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please choose an image (JPG or PNG).')
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Please choose a JPG, PNG, or WebP image.')
       return
     }
     if (file.size > 10 * 1024 * 1024) {
@@ -390,12 +392,12 @@ export default function Report() {
         if (path) {
           // Citizens cannot update complaint rows (RLS), so the path is attached
           // through a SECURITY DEFINER RPC that checks ownership.
-          const { error: attachError } = await supabase.rpc('attach_photo', {
+          const { data: attached, error: attachError } = await supabase.rpc('attach_photo', {
             p_complaint_id: res.complaint_id,
             p_path: path,
           })
-          if (attachError) {
-            console.error('attach_photo failed:', attachError.message)
+          if (attachError || attached !== true) {
+            console.error('attach_photo failed:', attachError?.message ?? 'ownership check failed')
             toast.warning('Report filed, but the photo could not be attached.')
           }
         } else {
@@ -419,11 +421,14 @@ export default function Report() {
   }
 
   async function uploadPhoto(complaintId: string, file: File): Promise<string | null> {
-    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const path = `${complaintId}/${Date.now()}-${safe}`
+    const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+    const objectId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const path = `${complaintId}/${objectId}.${ext}`
     const { error } = await supabase.storage
       .from('complaint-photos')
-      .upload(path, file, { cacheControl: '3600', upsert: false })
+      .upload(path, file, { cacheControl: '3600', contentType: file.type, upsert: false })
     if (error) {
       console.error('photo upload failed:', error.message)
       return null
@@ -644,10 +649,10 @@ export default function Report() {
                   <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-border bg-card p-4 hover:bg-secondary/60">
                     <Camera className="h-5 w-5 text-primary" />
                     <span className="text-sm font-medium">Add a photo</span>
-                    <span className="text-xs text-muted-foreground">JPG or PNG, up to 10 MB</span>
+                    <span className="text-xs text-muted-foreground">JPG, PNG, or WebP, up to 10 MB</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp"
                       className="sr-only"
                       onChange={(e) => handlePhoto(e.target.files?.[0])}
                     />
@@ -747,11 +752,18 @@ export default function Report() {
                     <SelectValue placeholder="Pick your area" />
                   </SelectTrigger>
                   <SelectContent>
-                    {COUNCIL_AREAS.map((a) => (
-                      <SelectItem key={a.value} value={a.value}>
-                        {a.label}
-                      </SelectItem>
-                    ))}
+                    <SelectGroup>
+                      <SelectLabel>Municipal Councils (2)</SelectLabel>
+                      {COUNCIL_AREAS.filter((area) => area.group === 'municipal').map((area) => (
+                        <SelectItem key={area.value} value={area.value}>{area.label}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Area Councils (6)</SelectLabel>
+                      {COUNCIL_AREAS.filter((area) => area.group === 'area').map((area) => (
+                        <SelectItem key={area.value} value={area.value}>{area.label}</SelectItem>
+                      ))}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
@@ -999,14 +1011,7 @@ export default function Report() {
 }
 
 function regionForArea(area: string): string {
-  switch (area) {
-    case 'banjul':
-      return 'Banjul'
-    case 'brikama':
-      return 'West Coast Region'
-    default:
-      return 'Greater Banjul'
-  }
+  return COUNCIL_AREAS.find((council) => council.value === area)?.region ?? ''
 }
 
 function friendlySubmitError(err: { message?: string } | null): string {

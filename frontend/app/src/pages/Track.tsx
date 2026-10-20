@@ -36,9 +36,25 @@ type TrackResult = {
 const STATUS_STEPS: Array<{ key: string; label: string }> = [
   { key: 'submitted', label: 'Submitted' },
   { key: 'received', label: 'Received' },
+  { key: 'assigned', label: 'Assigned' },
   { key: 'in_progress', label: 'In progress' },
-  { key: 'resolved', label: 'Resolved' },
+  { key: 'citizen_confirmation', label: 'Fix reported' },
+  { key: 'closed', label: 'Closed' },
 ]
+
+const STATUS_STAGE: Record<string, number> = {
+  submitted: 0,
+  received: 1,
+  assigned: 2,
+  forwarded: 1,
+  in_progress: 3,
+  waiting_info: 3,
+  escalated: 3,
+  reopened: 3,
+  citizen_confirmation: 4,
+  resolved: 4,
+  closed: 5,
+}
 
 export default function Track() {
   useEffect(() => {
@@ -111,9 +127,7 @@ export default function Track() {
   }
 
   const badge = result ? statusMeta(result.status ?? undefined) : null
-  const currentIdx = result
-    ? STATUS_STEPS.findIndex((s) => s.key === result.status)
-    : -1
+  const currentIdx = result ? (STATUS_STAGE[result.status ?? ''] ?? -1) : -1
 
   return (
     <div className="mx-auto w-full max-w-[1200px] px-5 py-8 md:px-6">
@@ -182,8 +196,8 @@ export default function Track() {
                 <div className="h-4 w-32 animate-pulse rounded bg-muted" />
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              {Array.from({ length: 4 }).map((_, i) => (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+              {Array.from({ length: STATUS_STEPS.length }).map((_, i) => (
                 <div key={i} className="h-20 animate-pulse rounded-lg border border-border bg-muted" />
               ))}
             </div>
@@ -251,7 +265,7 @@ export default function Track() {
             {/* progress steps */}
             <div>
               <p className="mb-3 text-sm font-medium">Progress</p>
-              <ol className="grid grid-cols-4 gap-2">
+              <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                 {STATUS_STEPS.map((s, i) => {
                   const done = currentIdx >= i && currentIdx !== -1
                   const isCurrent = currentIdx === i

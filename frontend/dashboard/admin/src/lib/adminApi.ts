@@ -809,10 +809,10 @@ const LOGO_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 /**
  * Upload an institution logo to the institution-logos bucket and return its
  * public URL. Overwrites the previous file for the same institution (files
- * are named <institutionId>.<ext>).
+ * are named <institutionId>.<ext>) and save the resulting URL on the institution row.
  */
 export async function uploadInstitutionLogo(
-  institutionId: string,
+  institutionCode: string,
   file: File
 ): Promise<LogoUploadResult> {
   if (!LOGO_MIME_TYPES.includes(file.type)) {
@@ -822,8 +822,15 @@ export async function uploadInstitutionLogo(
     throw new Error("Logo must be smaller than 2 MB")
   }
   const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
-  const path = `${institutionId}.${ext}`
   const { supabase } = await import("./secretsClient")
+  const { data: institution, error: lookupError } = await supabase
+    .from('institutions')
+    .select('id')
+    .eq('code', institutionCode.toUpperCase())
+    .maybeSingle()
+  if (lookupError) throw new Error(lookupError.message)
+  if (!institution) throw new Error(`No live institution matches code ${institutionCode.toUpperCase()}`)
+  const path = `${institution.id}.${ext}`
   const { error } = await supabase.storage
     .from(LOGO_BUCKET)
     .upload(path, file, {
@@ -833,5 +840,13 @@ export async function uploadInstitutionLogo(
     })
   if (error) throw new Error(error.message)
   const { data } = supabase.storage.from(LOGO_BUCKET).getPublicUrl(path)
+  const { data: updated, error: updateError } = await supabase
+    .from('institutions')
+    .update({ logo_url: data.publicUrl })
+    .eq('id', institution.id)
+    .select('id')
+    .maybeSingle()
+  if (updateError) throw new Error(updateError.message)
+  if (!updated) throw new Error('The logo uploaded, but the institution record was not updated.')
   return { logoUrl: data.publicUrl }
 }

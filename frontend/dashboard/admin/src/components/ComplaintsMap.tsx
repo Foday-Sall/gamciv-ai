@@ -3,6 +3,7 @@ import { AlertCircle, Loader2, MapPin, RefreshCw } from "lucide-react"
 import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from "react-leaflet"
 import type { LatLngBounds } from "leaflet"
 import { Button } from "@/components/ui/button"
+import { councilAreaLabel } from "@/lib/councils"
 import { supabase } from "@/lib/secretsClient"
 
 type Bounds = { west: number; south: number; east: number; north: number }
@@ -182,6 +183,7 @@ export function ComplaintsMap({
                 <span className="font-semibold">{complaint.tracking_no}</span>
                 <span className="block max-w-48 truncate">{complaint.title}</span>
                 <span className="text-xs">{complaint.category ?? "Report"} · {complaint.status.replaceAll("_", " ")}</span>
+                <span className="block max-w-48 truncate text-xs">{[complaint.ward, councilAreaLabel(complaint.council_area), complaint.region].filter(Boolean).join(" · ")}</span>
                 {onSelectComplaint ? <span className="block text-xs font-medium text-emerald-800">Select marker for details</span> : null}
               </Tooltip>
             </CircleMarker>
