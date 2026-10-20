@@ -280,15 +280,25 @@ export async function processReport(
   // 4) Personalized confirmation — CHANNELS_URL set routes it through the Go
   //    channels service; unset sends directly via GOWA. Must not fail the
   //    intake either way.
-  const confirmed = confidence !== null && confidence >= 0.7;
-  const confirmationMessage = confirmed
-    ? classificationConfirmedText(
+  // Gibberish guard: "other" with near-zero confidence means the classifier
+  // could not make head or tail of the text. The report is still filed
+  // (Central Desk), but the citizen gets the actionable sorry reply instead
+  // of a misleading confirmation.
+  const gibberish = classifyFailed ||
+    (categoryHint === "other" && confidence !== null && confidence < 0.2);
+  let confirmationMessage: string;
+  if (gibberish) {
+    confirmationMessage = classificationFailedText();
+  } else if (confidence !== null && confidence >= 0.7) {
+    confirmationMessage = classificationConfirmedText(
       profile,
       categoryHint,
       result.institution_name ?? result.institution,
       result.tracking_no,
-    )
-    : lowConfidenceText(profile, categoryHint, result.tracking_no);
+    );
+  } else {
+    confirmationMessage = lowConfidenceText(profile, categoryHint, result.tracking_no);
+  }
   try {
     if (msg.phone) {
       await sendOrFallback(
@@ -301,26 +311,6 @@ export async function processReport(
     }
   } catch (e) {
     console.error("confirmation send failed:", e);
-  }
-
-  // 5) When the classifier was completely unusable, the citizen still gets an
-  //    actionable reply so the intake is never silent (the low-confidence
-  //    branch above already covers a classified-but-unsure report).
-  if (classifyFailed) {
-    try {
-      if (msg.phone) {
-        const sorry = classificationFailedText();
-        await sendOrFallback(
-          Deno.env,
-          "whatsapp",
-          msg.phone,
-          sorry,
-          () => deps.gowa.sendMessage(msg.phone!, sorry).then(() => undefined),
-        );
-      }
-    } catch (e) {
-      console.error("classification-failure send failed:", e);
-    }
   }
 
   return {

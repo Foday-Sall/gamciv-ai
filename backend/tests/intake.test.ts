@@ -170,9 +170,21 @@ Deno.test("processReport: AI failure still files the report (hints null) and rep
   const args = recorded.rpcCalls[0].args as SubmitComplaintArgs;
   assertEquals(args.p_ai_category, null);
   assertEquals(args.p_confidence, null);
-  // Never silent: the citizen gets the actionable sorry text
-  assertEquals(recorded.gowaSends.length, 2);
-  assertEquals(recorded.gowaSends[1].message, classificationFailedText());
+  // Never silent: the citizen gets the actionable sorry text (single reply)
+  assertEquals(recorded.gowaSends.length, 1);
+  assertEquals(recorded.gowaSends[0].message, classificationFailedText());
+});
+
+Deno.test("processReport: gibberish (other, near-zero confidence) gets the sorry reply", async () => {
+  const { deps, recorded } = makeDeps({
+    ai: { category: "other", urgency: "normal", confidence: 0.0 },
+  });
+  const outcome = await processReport(makeMsg(), testProfile, deps);
+  assertEquals(outcome.status, "accepted");
+  // Report still filed (Central Desk) but the reply is the actionable sorry
+  assertEquals(recorded.rpcCalls.length, 1);
+  assertEquals(recorded.gowaSends.length, 1);
+  assertEquals(recorded.gowaSends[0].message, classificationFailedText());
 });
 
 Deno.test("processReport: GOWA confirmation failure does NOT fail the intake", async () => {
