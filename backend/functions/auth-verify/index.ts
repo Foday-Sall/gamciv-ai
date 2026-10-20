@@ -325,7 +325,7 @@ export async function handleSendEmailOtp(
     sent: sent.ok,
     mode: "otp",
     message: sent.ok
-      ? `We sent a verification code to ${email}. It expires in 10 minutes.`
+      ? `We sent a verification code to ${email}. It expires in 15 minutes.`
       : "Email delivery is not configured. The code could not be sent.",
   });
 }
@@ -373,7 +373,7 @@ export async function handleSendPhoneOtp(
   // case where it is already verified on another profile.
   const owner = await phoneOwner(deps, phone);
   if (owner && owner !== user.id) {
-    return errorResponse(409, "That phone number is already verified on another account.");
+    return errorResponse(409, "This number is already in use by another account. Sign in with that account or use a different number.");
   }
   const sends = await countSendsLastHour(deps, phone);
   if (sends >= OTP_MAX_SENDS_PER_HOUR) {

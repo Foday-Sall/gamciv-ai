@@ -64,8 +64,8 @@ function classifySendError(status: number, message: string | undefined): string 
   ) {
     return FULL_NUMBER_HINT
   }
-  if (status === 409 || m.includes('already verified')) {
-    return 'That number is already verified on another account. Use it with that account or sign in.'
+  if (status === 409 || m.includes('already verified') || m.includes('already in use')) {
+    return 'This number is already in use by another account. Sign in with that account or use a different number.'
   }
   // Anything else: show the server's actual message.
   return message && message.trim().length > 0 ? message : 'Could not send the code. Try again.'

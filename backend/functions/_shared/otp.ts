@@ -19,7 +19,7 @@ export interface OtpRecord {
 }
 
 /** Number of seconds an OTP is valid for. */
-export const OTP_TTL_SECONDS = 600;
+export const OTP_TTL_SECONDS = 900;  // 15 minutes
 /** Verify attempts allowed per code. */
 export const OTP_MAX_ATTEMPTS = 5;
 /** Sends allowed per recipient per rolling hour. */
