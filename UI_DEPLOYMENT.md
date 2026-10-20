@@ -20,6 +20,10 @@ After CI succeeds on a push to `main`, the workflow builds with the production S
 
 No manual build, `scp`, `docker cp`, or Nginx reload is needed for routine changes. A manual deployment can be started from **GitHub → Actions → Deploy → Run workflow**.
 
+## Institution dashboard details
+
+For the officer dashboard routes, data isolation rules, backend contract, recent deployment-test fix, and fast verification commands, see [INSTITUTION_DASHBOARD_HANDOFF.md](INSTITUTION_DASHBOARD_HANDOFF.md).
+
 ## If a workflow fails
 
 Check the **CI** run first. A failed CI run intentionally blocks automatic deployment. If CI passes but deployment fails, inspect the **Deploy** job logs, confirm the three repository secrets above, then check the Nginx configuration and the reported route or asset. For a blank page, verify that JS/CSS requests are HTTP 200 and that directories/files are readable by Nginx (`755`/`644`).
