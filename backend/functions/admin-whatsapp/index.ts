@@ -708,9 +708,20 @@ function gowaResults(json: Record<string, unknown>): Record<string, unknown> {
 const defaultDeps: WhatsappDeps = {
   verify: verifyHybridJwt,
   adminUserId: async (jwt: string): Promise<string | null> => {
+    // fn_is_admin resolves auth.uid() from the CALLER's JWT — same pattern as
+    // admin-secrets: run the RPC as the requesting user, not the service role.
     try {
-      const isAdmin = await servicePostgrest("fn_is_admin", {});
-      if (isAdmin !== true) return null;
+      const isAdmin = await restRequest(`/rest/v1/rpc/fn_is_admin`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({}),
+      });
+      const text = await isAdmin.text();
+      if (!isAdmin.ok) {
+        console.error(`fn_is_admin HTTP ${isAdmin.status}: ${text.slice(0, 200)}`);
+        return null;
+      }
+      if (JSON.parse(text) !== true) return null;
     } catch (e) {
       console.error("fn_is_admin rpc failed:", e instanceof Error ? e.message : e);
       return null;
