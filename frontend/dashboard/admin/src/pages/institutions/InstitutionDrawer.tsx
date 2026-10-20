@@ -1,10 +1,12 @@
+import { useRef } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { X, Mail, Phone, Hash, Layers } from "lucide-react"
+import { X, Mail, Phone, Hash, Layers, ImagePlus, Building2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import type { Institution } from "@/lib/adminApi"
+import { toast } from "@/components/ui/toast"
+import { uploadInstitutionLogo, type Institution } from "@/lib/adminApi"
 import { AccessBadge, StatusBadge } from "./InstitutionBadges"
 
 /** Slide-in details drawer for the selected institution. */
@@ -15,6 +17,22 @@ export default function InstitutionDrawer({
   institution: Institution | null
   onClose: () => void
 }) {
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
+  const uploadLogo = async (file: File) => {
+    if (!institution) return
+    try {
+      await uploadInstitutionLogo(institution.id, file)
+      toast({ title: "Logo uploaded", description: `${institution.name} logo is saved.`, variant: "success" })
+    } catch (error) {
+      toast({
+        title: "Logo upload failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      })
+    }
+  }
+
   return (
     <AnimatePresence>
       {institution ? (
@@ -36,17 +54,42 @@ export default function InstitutionDrawer({
             aria-label={`${institution.name} details`}
           >
             <div className="flex items-start justify-between border-b border-border p-6">
-              <div>
-                <p className="font-display text-lg font-semibold">{institution.name}</p>
-                <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-                  <Hash className="h-3.5 w-3.5" style={{ strokeWidth: 1.75 }} aria-hidden="true" />
-                  {institution.shortCode}
-                </p>
+              <div className="flex items-center gap-3">
+                <Building2 className="h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
+                <div>
+                  <p className="font-display text-lg font-semibold">{institution.name}</p>
+                  <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Hash className="h-3.5 w-3.5" style={{ strokeWidth: 1.75 }} aria-hidden="true" />
+                    {institution.shortCode}
+                  </p>
+                </div>
               </div>
-              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close details">
-                <X className="h-4 w-4" aria-hidden="true" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => logoInputRef.current?.click()}
+                  aria-label="Upload logo"
+                  title="Upload logo (PNG/JPEG/WebP, max 2 MB)"
+                >
+                  <ImagePlus className="h-4 w-4" aria-hidden="true" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close details">
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </div>
             </div>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) void uploadLogo(file)
+                event.target.value = ""
+              }}
+            />
 
             <div className="flex-1 space-y-5 overflow-y-auto p-6 slim-scroll">
               <div className="grid grid-cols-2 gap-3">

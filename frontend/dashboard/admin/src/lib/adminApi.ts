@@ -680,3 +680,166 @@ export async function getSecretsAudit(limit = 50): Promise<SecretsAuditEntry[]> 
     adminEmail: row.admin_email,
   }))
 }
+
+// ---------------------------------------------------------------------------
+// WhatsApp numbers manager (admin-whatsapp edge function)
+// ---------------------------------------------------------------------------
+
+export type WhatsappRole = 'otp' | 'chat'
+export type WhatsappStatus = 'pending' | 'linked' | 'revoked'
+
+export interface WhatsappNumber {
+  id: string | null
+  number: string
+  role: WhatsappRole
+  status: WhatsappStatus
+  gowaInstance: string | null
+  gowaState: string | null
+  gowaJid: string | null
+  linkedAt: string | null
+  revokedAt: string | null
+  createdAt: string | null
+}
+
+export interface StartLinkResult {
+  number: string
+  role: WhatsappRole
+  status: WhatsappStatus
+  gowaInstance: string
+  pairingCode: string
+}
+
+export interface EffectiveSender {
+  sender: string | null
+  source: 'registry' | 'app_settings' | 'none'
+}
+
+const WHATSAPP_URL = "https://api.pocketsoftware.dev/functions/v1/admin-whatsapp"
+
+/**
+ * Call the admin-whatsapp edge function with the current admin session.
+ * Shares the same-origin Supabase session used by the citizen app.
+ */
+async function whatsappCall(
+  action: string,
+  params: Record<string, unknown> = {}
+): Promise<Record<string, unknown>> {
+  const { supabase } = await import("./secretsClient")
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) throw new Error("Not signed in")
+  const res = await fetch(WHATSAPP_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ action, params }),
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error || `Request failed (${res.status})`)
+  }
+  return (await res.json()) as Record<string, unknown>
+}
+
+export async function listWhatsappNumbers(): Promise<WhatsappNumber[]> {
+  const payload = await whatsappCall("list_numbers")
+  const rows = (payload.data as { numbers?: WhatsappNumber[] })?.numbers ?? []
+  return rows.map((row) => ({
+    id: row.id,
+    number: row.number,
+    role: (row.role === 'otp' ? 'otp' : 'chat') as WhatsappRole,
+    status: (['pending', 'linked', 'revoked'].includes(row.status)
+      ? row.status
+      : 'pending') as WhatsappStatus,
+    gowaInstance: row.gowaInstance,
+    gowaState: row.gowaState,
+    gowaJid: row.gowaJid,
+    linkedAt: row.linkedAt,
+    revokedAt: row.revokedAt,
+    createdAt: row.createdAt,
+  }))
+}
+
+export async function startWhatsappLink(
+  phone: string,
+  role: WhatsappRole = 'chat'
+): Promise<StartLinkResult> {
+  const payload = await whatsappCall("start_link", { phone, role })
+  const data = payload.data as StartLinkResult
+  if (!data?.pairingCode) throw new Error("Pairing code not returned")
+  return data
+}
+
+export async function confirmWhatsappLink(
+  phone: string
+): Promise<{ status: WhatsappStatus; jid?: string | null; loggedIn?: boolean }> {
+  const payload = await whatsappCall("confirm_link", { phone })
+  const data = payload.data as { status: WhatsappStatus; jid?: string | null; loggedIn?: boolean }
+  return { status: data.status, jid: data.jid, loggedIn: data.loggedIn }
+}
+
+export async function setWhatsappRole(phone: string, role: WhatsappRole): Promise<void> {
+  await whatsappCall("set_role", { phone, role })
+}
+
+export async function revokeWhatsappNumber(phone: string): Promise<void> {
+  await whatsappCall("revoke", { phone })
+}
+
+export async function deleteWhatsappNumber(phone: string): Promise<void> {
+  await whatsappCall("delete_number", { phone })
+}
+
+export async function getEffectiveSender(): Promise<EffectiveSender> {
+  const payload = await whatsappCall("get_sender")
+  const data = payload.data as EffectiveSender
+  return {
+    sender: data.sender,
+    source: (data.source === 'registry' ? 'registry'
+      : data.source === 'app_settings' ? 'app_settings' : 'none') as EffectiveSender['source'],
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Institution logos (institution-logos storage bucket)
+// ---------------------------------------------------------------------------
+
+export interface LogoUploadResult {
+  logoUrl: string
+}
+
+const LOGO_BUCKET = 'institution-logos'
+const LOGO_MAX_BYTES = 2 * 1024 * 1024
+const LOGO_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+
+/**
+ * Upload an institution logo to the institution-logos bucket and return its
+ * public URL. Overwrites the previous file for the same institution (files
+ * are named <institutionId>.<ext>).
+ */
+export async function uploadInstitutionLogo(
+  institutionId: string,
+  file: File
+): Promise<LogoUploadResult> {
+  if (!LOGO_MIME_TYPES.includes(file.type)) {
+    throw new Error("Logo must be a PNG, JPEG or WebP image")
+  }
+  if (file.size > LOGO_MAX_BYTES) {
+    throw new Error("Logo must be smaller than 2 MB")
+  }
+  const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+  const path = `${institutionId}.${ext}`
+  const { supabase } = await import("./secretsClient")
+  const { error } = await supabase.storage
+    .from(LOGO_BUCKET)
+    .upload(path, file, {
+      contentType: file.type,
+      cacheControl: '3600',
+      upsert: true,
+    })
+  if (error) throw new Error(error.message)
+  const { data } = supabase.storage.from(LOGO_BUCKET).getPublicUrl(path)
+  return { logoUrl: data.publicUrl }
+}

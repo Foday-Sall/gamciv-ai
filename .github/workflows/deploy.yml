@@ -60,8 +60,12 @@ jobs:
           set -e
           export SSH="ssh -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key $VPS_HOST"
           export SCP="scp -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key"
-          $SCP backend/db/0015_institution_dashboard.sql "$VPS_HOST:/tmp/0015_institution_dashboard.sql"
-          $SSH "docker cp /tmp/0015_institution_dashboard.sql supabase-db:/tmp/0015_institution_dashboard.sql && docker exec -i supabase-db psql -U supabase_admin -d postgres -f /tmp/0015_institution_dashboard.sql && rm -f /tmp/0015_institution_dashboard.sql"
+          # database migrations: run every pending db/*.sql on the VPS database
+          for M in backend/db/0015_institution_dashboard.sql backend/db/0016_dispatch.sql backend/db/0017_profile_avatar.sql backend/db/0017_whatsapp_numbers.sql; do
+            N=$(basename "$M")
+            $SCP "$M" "$VPS_HOST:/tmp/$N"
+            $SSH "docker cp /tmp/$N supabase-db:/tmp/$N && docker exec -i supabase-db psql -U supabase_admin -d postgres -f /tmp/$N && rm -f /tmp/$N"
+          done
           # frontends: the nginx image bakes HTML at /usr/share/nginx/html — copy into
           # the running container and reload (the /opt/* staging dirs are scratch)
           $SSH "mkdir -p /opt/gamciv-app/html /opt/gamciv-dashboard/html /opt/gamciv-landing/html"

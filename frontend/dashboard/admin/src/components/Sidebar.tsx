@@ -7,6 +7,7 @@ import {
   Shield,
   ScrollText,
   Settings,
+  Smartphone,
   ChevronsLeft,
   ChevronsRight,
   X,
@@ -19,6 +20,7 @@ export type NavKey =
   | "accounts"
   | "access-control"
   | "audit-log"
+  | "whatsapp"
   | "settings"
 
 export type NavItem = {
@@ -35,6 +37,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "accounts", to: "/accounts", label: "Accounts", subtext: "Accounts you issued", Icon: Users },
   { key: "access-control", to: "/access-control", label: "Access Control", subtext: "Limits per institution", Icon: Shield },
   { key: "audit-log", to: "/audit-log", label: "Audit Log", subtext: "Every administrative action", Icon: ScrollText },
+  { key: "whatsapp", to: "/whatsapp-numbers", label: "WhatsApp Numbers", subtext: "Numbers and pairing", Icon: Smartphone },
   { key: "settings", to: "/settings", label: "Settings", subtext: "Escalation and notifications", Icon: Settings },
 ]
 

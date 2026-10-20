@@ -10,6 +10,7 @@ import AccountsPage from "@/pages/AccountsPage"
 import AccessControlPage from "@/pages/AccessControlPage"
 import AuditLogPage from "@/pages/AuditLogPage"
 import SettingsPage from "@/pages/SettingsPage"
+import WhatsappNumbersPage from "@/pages/WhatsappNumbersPage"
 import { NotScheduledPage } from "@/pages/NotScheduledPage"
 import "@/index.css"
 
@@ -47,6 +48,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/access-control" element={<AccessControlPage />} />
           <Route path="/audit-log" element={<AuditLogPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/whatsapp-numbers" element={<WhatsappNumbersPage />} />
           <Route path="*" element={<NotScheduledPage />} />
         </Route>
       </Routes>
