@@ -24,6 +24,13 @@ export interface TelegramClient {
    * consume it immediately (see storePhotoFromUrl in photoStorage.ts).
    */
   getPhotoUrl(fileId: string): Promise<string | null>;
+  /**
+   * Resolve any file_id to a short-lived download URL (null if unresolvable).
+   * Used for voice notes; same token-bearing caveat as getPhotoUrl.
+   */
+  getFileUrl(fileId: string): Promise<string | null>;
+  /** Download a file's bytes from a getFileUrl result; null on any failure. */
+  downloadFile(url: string): Promise<Uint8Array | null>;
 }
 
 export interface TelegramClientConfig {
@@ -79,6 +86,42 @@ export class FetchTelegramClient implements TelegramClient {
     }
   }
 
+  /**
+   * Resolve a file_id (photo or voice note) to a short-lived download URL.
+   * Returns null on failure; the URL embeds the bot token and expires in ~1h
+   * so callers must consume it immediately and never store it.
+   */
+  async getFileUrl(fileId: string): Promise<string | null> {
+    try {
+      const body = await this.callApi("getFile", { file_id: fileId });
+      const filePath = body.result?.file_path;
+      if (typeof filePath !== "string" || !filePath) return null;
+      return `${this.apiBase}/file/bot${this.botToken}/${filePath}`;
+    } catch (e) {
+      console.error("telegram getFile failed:", e);
+      return null;
+    }
+  }
+
+  /** Download a file's bytes from a getFileUrl result; null on any failure. */
+  async downloadFile(url: string): Promise<Uint8Array | null> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const res = await this.fetchImpl(url, { signal: controller.signal });
+      if (!res.ok) {
+        console.error(`telegram file download HTTP ${res.status}`);
+        return null;
+      }
+      return new Uint8Array(await res.arrayBuffer());
+    } catch (e) {
+      console.error("telegram file download failed:", e);
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   private endpoint(method: string): string {
     return `${this.apiBase}/bot${this.botToken}/${method}`;
   }
@@ -127,6 +170,13 @@ export interface TelegramPhotoSize {
   height?: number;
 }
 
+/** Telegram voice note metadata (subset). */
+export interface TelegramVoice {
+  file_id: string;
+  duration?: number;
+  mime_type?: string;
+}
+
 /** Inbound Telegram message (subset of fields we consume). */
 export interface TelegramMessage {
   message_id: number;
@@ -140,6 +190,7 @@ export interface TelegramMessage {
   text?: string;
   caption?: string;
   photo?: TelegramPhotoSize[];
+  voice?: TelegramVoice;
   location?: { latitude: number; longitude: number };
 }
 
@@ -162,12 +213,15 @@ export interface TelegramReport {
   body: string;
   /** Largest photo size's file_id (resolve via getPhotoUrl). */
   photoFileId: string | null;
+  /** Voice note file_id (transcribe via getFile + audio/transcriptions). */
+  voiceFileId: string | null;
   lat: number | null;
   lng: number | null;
 }
 
 const PHOTO_ONLY_BODY = "Photo report sent via Telegram (no caption)";
 const LOCATION_ONLY_BODY = "Location pin sent via Telegram (no text)";
+const VOICE_ONLY_BODY = "Voice report sent via Telegram (transcription failed)";
 
 /** Parse a webhook body as a Telegram update; null on invalid JSON. */
 export function parseUpdate(raw: string): TelegramUpdate | null {
@@ -205,15 +259,18 @@ export function extractReport(update: TelegramUpdate): TelegramReport | null {
   if (!body && typeof msg.caption === "string") body = msg.caption.trim();
 
   const photo = largestPhoto(msg.photo);
+  const voiceFileId = typeof msg.voice?.file_id === "string" && msg.voice.file_id
+    ? msg.voice.file_id
+    : null;
   const hasCoords = typeof msg.location?.latitude === "number" &&
     typeof msg.location?.longitude === "number";
 
-  // Nothing to intake: no text, no photo, no location.
-  if (!body && !photo && !hasCoords) return null;
+  // Nothing to intake: no text, no photo, no voice note, no location.
+  if (!body && !photo && !voiceFileId && !hasCoords) return null;
 
   // Media-only reports are accepted with a generated description; the SQL
   // side derives title/description defaults (see docs/sql-contract.md).
-  if (!body) body = photo ? PHOTO_ONLY_BODY : LOCATION_ONLY_BODY;
+  if (!body) body = voiceFileId ? VOICE_ONLY_BODY : photo ? PHOTO_ONLY_BODY : LOCATION_ONLY_BODY;
 
   const from = (msg.from ?? {}) as TelegramMessage["from"] & Record<string, unknown>;
   const nameParts = [from.first_name, from.last_name].filter((p) =>
@@ -231,6 +288,7 @@ export function extractReport(update: TelegramUpdate): TelegramReport | null {
     name,
     body,
     photoFileId: photo?.file_id ?? null,
+    voiceFileId,
     lat: hasCoords ? msg.location!.latitude : null,
     lng: hasCoords ? msg.location!.longitude : null,
   };
