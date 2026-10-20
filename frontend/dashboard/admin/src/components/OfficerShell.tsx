@@ -72,6 +72,15 @@ export function OfficerShell({
     setMobileOpen(false)
   }
 
+  function requestSignOut(fromMobileMenu = false) {
+    if (fromMobileMenu) {
+      setMobileOpen(false)
+      window.setTimeout(onSignOut, 180)
+      return
+    }
+    onSignOut()
+  }
+
   function Navigation({ mobile = false }: { mobile?: boolean }) {
     return (
       <nav aria-label="Officer navigation" className="space-y-1 px-3 py-4">
@@ -152,7 +161,7 @@ export function OfficerShell({
             type="button"
             variant="ghost"
             className={cn("w-full justify-start text-muted-foreground", collapsed && "justify-center px-2")}
-            onClick={onSignOut}
+            onClick={() => requestSignOut()}
             title={collapsed ? "Sign out" : undefined}
           >
             <LogOut className="h-4 w-4" aria-hidden="true" />
@@ -196,7 +205,7 @@ export function OfficerShell({
             <span className="hidden sm:inline">{refreshing ? "Refreshing" : "Refresh data"}</span>
             <span className="sm:hidden sr-only">{refreshing ? "Refreshing data" : "Refresh data"}</span>
           </Button>
-          <Button type="button" variant="ghost" size="icon" className="md:hidden" onClick={onSignOut} aria-label="Sign out">
+          <Button type="button" variant="ghost" size="icon" className="md:hidden" onClick={() => requestSignOut()} aria-label="Sign out">
             <LogOut className="h-4 w-4" aria-hidden="true" />
           </Button>
         </header>
@@ -222,7 +231,7 @@ export function OfficerShell({
             <Navigation mobile />
           </div>
           <div className="border-t border-border p-3">
-            <Button type="button" variant="ghost" className="w-full justify-start" onClick={onSignOut}>
+            <Button type="button" variant="ghost" className="w-full justify-start" onClick={() => requestSignOut(true)}>
               <LogOut className="mr-2 h-4 w-4" aria-hidden="true" /> Sign out
             </Button>
           </div>

@@ -42,6 +42,7 @@ import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
 import { OfficerShell } from "@/components/OfficerShell"
 import { ComplaintsMap } from "@/components/ComplaintsMap"
 import { ComplaintDetailsDialog } from "@/components/ComplaintDetailsDialog"
+import { SignOutConfirmationDialog } from "@/components/SignOutConfirmationDialog"
 import {
   Table,
   TableBody,
@@ -204,6 +205,9 @@ export default function InstitutionDashboard() {
   const [activeSection, setActiveSection] = useState<"overview" | "map" | "analytics" | "complaints">("overview")
   const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null)
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+  const [signOutOpen, setSignOutOpen] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState<string | null>(null)
 
   useEffect(() => {
     document.title = "Institution dashboard - GamCiv"
@@ -455,10 +459,40 @@ export default function InstitutionDashboard() {
       .slice(0, 5)
   }, [rows])
 
-  async function signOut() {
-    await supabase.auth.signOut()
-    window.location.href = "/app/login"
+  function requestSignOut() {
+    setSignOutError(null)
+    setSignOutOpen(true)
   }
+
+  async function confirmSignOut() {
+    setSigningOut(true)
+    setSignOutError(null)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        setSignOutError("We couldn't sign you out. Check your connection and try again.")
+        return
+      }
+      window.location.replace("/app/login")
+    } catch {
+      setSignOutError("We couldn't sign you out. Check your connection and try again.")
+    } finally {
+      setSigningOut(false)
+    }
+  }
+
+  const signOutDialog = (
+    <SignOutConfirmationDialog
+      open={signOutOpen}
+      onOpenChange={(open) => {
+        setSignOutOpen(open)
+        if (!open) setSignOutError(null)
+      }}
+      onConfirm={() => void confirmSignOut()}
+      signingOut={signingOut}
+      error={signOutError}
+    />
+  )
 
   function goToSection(section: "overview" | "map" | "analytics" | "complaints") {
     document.getElementById(section)?.scrollIntoView({
@@ -483,6 +517,7 @@ export default function InstitutionDashboard() {
 
   if (accessError) {
     return (
+      <>
       <main className="mx-auto flex min-h-[70vh] w-full max-w-xl items-center px-4 py-10">
         <Card className="w-full">
           <CardHeader className="items-center text-center">
@@ -496,12 +531,14 @@ export default function InstitutionDashboard() {
             <Button variant="outline" onClick={() => window.location.reload()}>
               <RefreshCw className="mr-2 h-4 w-4" /> Retry
             </Button>
-            <Button onClick={() => void signOut()}>
+            <Button onClick={requestSignOut}>
               <LogOut className="mr-2 h-4 w-4" /> Sign out
             </Button>
           </CardContent>
         </Card>
       </main>
+      {signOutDialog}
+      </>
     )
   }
 
@@ -544,12 +581,13 @@ export default function InstitutionDashboard() {
   ]
 
   return (
+    <>
     <OfficerShell
       institutionName={institution?.name ?? "Your institution"}
       activeSection={activeSection}
       onNavigate={goToSection}
       onRefresh={() => institution && void loadDashboard(institution.id)}
-      onSignOut={() => void signOut()}
+      onSignOut={requestSignOut}
       refreshing={dataLoading}
     >
       <header className="mb-5 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
@@ -930,5 +968,7 @@ export default function InstitutionDashboard() {
         onOpenChange={(open) => { if (!open) setSelectedComplaintId(null) }}
       />
     </OfficerShell>
+    {signOutDialog}
+    </>
   )
 }
