@@ -453,7 +453,7 @@ export default function Report() {
     <div className="mx-auto w-full max-w-3xl px-5 py-8 min-[1024px]:max-w-[1200px] md:px-6">
       <main className="w-full">
         <div className="grid grid-cols-1 gap-8 min-[1024px]:grid-cols-12">
-        <div className="min-[1024px]:col-span-7">
+        <div className={step === 5 ? 'min-[1024px]:col-span-12' : 'min-[1024px]:col-span-7'}>
         {step < 5 && (
           <div className="mb-8">
             <div className="mb-2 flex items-center justify-between text-sm">
@@ -876,7 +876,7 @@ export default function Report() {
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="mx-auto max-w-xl text-center min-[1024px]:max-w-[560px]"
+            className="mx-auto w-full max-w-xl text-center min-[1024px]:max-w-[560px]"
           >
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
               <Check className="h-8 w-8 text-primary" />
@@ -892,15 +892,15 @@ export default function Report() {
                 {result.tracking_no}
               </p>
               <p className="mt-1 text-xs text-gold-ink">
-                Write it down or screenshot it — you will need it to follow your report.
+                Write it down or screenshot it. You will need it to follow your report.
               </p>
             </div>
             <div className="mt-4 flex flex-col justify-center gap-2 sm:flex-row">
-              <Button variant="outline" className="h-11" onClick={copyTracking}>
+              <Button variant="outline" className="h-11 w-full sm:w-auto" onClick={copyTracking}>
                 {copied ? <Check /> : <Copy />}
                 {copied ? 'Copied' : 'Copy'}
               </Button>
-              <Button asChild className="h-11">
+              <Button asChild className="h-11 w-full sm:w-auto">
                 <Link to={`/track?ref=${result.tracking_no}`}>Track it</Link>
               </Button>
             </div>
