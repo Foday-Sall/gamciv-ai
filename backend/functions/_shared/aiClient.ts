@@ -205,6 +205,105 @@ export class FetchAiClient implements AiClient {
     this.fetchImpl = fetchImpl;
   }
 
+  /**
+   * Transcribe a voice note. Primary path: OpenAI-compatible
+   * POST {base_url}/audio/transcriptions (multipart field "file"). Some
+   * OpenAI-compatible gateways (Cloudflare Workers AI's /ai/v1) do not
+   * implement audio transcriptions — on 400/404 only, fall back to the
+   * provider's native endpoint: Cloudflare
+   * POST /client/v4/accounts/{account_id}/ai/run/@cf/openai/whisper with
+   * multipart field "audio" (derived from AI_BASE_URL's /accounts/{id}/ai/v1).
+   * Returns null on any failure; a failed transcription must never crash
+   * the intake. Empty/whitespace transcripts count as failure.
+   */
+  async transcribe(audio: Uint8Array, filename: string): Promise<string | null> {
+    try {
+      return await this.transcribeOpenAiCompat(audio, filename);
+    } catch (e) {
+      if (!(e instanceof TranscribeHttpError) || ![400, 404].includes(e.status)) {
+        console.error("transcription failed:", e);
+        return null;
+      }
+      console.error(`transcription HTTP ${e.status}, falling back to native endpoint`);
+    }
+    try {
+      return await this.transcribeNative(audio, filename);
+    } catch (e) {
+      console.error("native transcription failed:", e);
+      return null;
+    }
+  }
+
+  /** OpenAI-compatible path: POST {base}/audio/transcriptions, field "file". */
+  private async transcribeOpenAiCompat(
+    audio: Uint8Array,
+    filename: string,
+  ): Promise<string | null> {
+    const url = `${this.config.baseUrl}/audio/transcriptions`;
+    const model = Deno.env.get("AI_TRANSCRIBE_MODEL") ?? "whisper-1";
+    const form = new FormData();
+    form.append("file", new Blob([audio as BlobPart], { type: "audio/ogg" }), filename);
+    form.append("model", model);
+    form.append("response_format", "json");
+    const payload = await this.postForm(url, form);
+    return extractTranscriptText(payload);
+  }
+
+  /**
+   * Native Cloudflare path: POST /client/v4/accounts/{id}/ai/run/@cf/openai/whisper,
+   * multipart field "audio" (NOT "file"). Account id comes from AI_BASE_URL.
+   * Response shape: { result: { text: string }, success: boolean }.
+   */
+  private async transcribeNative(audio: Uint8Array, filename: string): Promise<string | null> {
+    const accountId = extractAccountId(this.config.baseUrl);
+    if (!accountId) {
+      throw new AiError("cannot derive Cloudflare account id from AI_BASE_URL for native whisper");
+    }
+    const url =
+      `${this.config.baseUrl.replace(/\/accounts\/[^/]+\/ai\/v1$/, "")}/accounts/${accountId}/ai/run/@cf/openai/whisper`;
+    const form = new FormData();
+    form.append("audio", new Blob([audio as BlobPart], { type: "audio/ogg" }), filename);
+    const payload = await this.postForm(url, form);
+    if (payload && typeof payload === "object" && "result" in payload) {
+      const result = payload.result as Record<string, unknown> | null;
+      const text = typeof result?.text === "string" ? result.text : "";
+      return text.trim() ? text.trim() : null;
+    }
+    // Some shapes may return top-level text
+    return extractTranscriptText(payload);
+  }
+
+  /** Shared POST of a multipart form with bearer auth + timeout. */
+  private async postForm(url: string, form: FormData): Promise<unknown> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.config.timeoutMs ?? 30000);
+    let res: Response;
+    try {
+      res = await this.fetchImpl(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.config.apiKey}` },
+        body: form,
+        signal: controller.signal,
+      });
+    } catch (e) {
+      throw new AiError(`transcription request failed: ${(e as Error).message}`);
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new TranscribeHttpError(
+        res.status,
+        `transcription HTTP ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`,
+      );
+    }
+    try {
+      return await res.json();
+    } catch {
+      throw new AiError("transcription returned invalid JSON");
+    }
+  }
+
   /** Classify a report description via an OpenAI-compatible chat completion. */
   async classify(description: string): Promise<Classification> {
     const url = this.config.baseUrl + CHAT_URL_SUFFIX;
@@ -284,4 +383,36 @@ export class FetchAiClient implements AiClient {
       return parseClassification(retryContent);
     }
   }
+}
+
+/** HTTP-level error carrying the status so the fallback gate can decide. */
+class TranscribeHttpError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/** Pull the transcript text out of top-level .text then .result.text. */
+function extractTranscriptText(payload: unknown): string | null {
+  let text = "";
+  if (payload && typeof payload === "object") {
+    const p = payload as Record<string, unknown>;
+    if (typeof p.text === "string") text = p.text;
+    else if (
+      p.result && typeof p.result === "object" &&
+      typeof (p.result as Record<string, unknown>).text === "string"
+    ) {
+      text = (p.result as Record<string, unknown>).text as string;
+    }
+  }
+  const trimmed = text.trim();
+  return trimmed ? trimmed : null;
+}
+
+/** Cloudflare AI_BASE_URL looks like https://.../client/v4/accounts/<id>/ai/v1. */
+export function extractAccountId(baseUrl: string): string | null {
+  const m = baseUrl.match(/\/accounts\/([0-9a-fA-F]{32})\/ai\/v1\/?$/);
+  return m ? m[1] : null;
 }

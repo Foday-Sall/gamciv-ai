@@ -119,6 +119,8 @@ export interface ExtractedMessage {
   name: string | null;
   body: string;
   imageUrl: string | null;
+  /** Voice/audio note media reference (relative GOWA path or absolute URL). */
+  audioUrl: string | null;
   lat: number | null;
   lng: number | null;
   isGroup: boolean;
@@ -128,7 +130,8 @@ export interface ExtractedMessage {
 /**
  * Pull the intake-relevant fields out of a v9.6 message payload.
  * Returns null when the event is not a usable citizen report (non-message
- * events, own outgoing messages, empty bodies).
+ * events, own outgoing messages, empty bodies, or messages with no text,
+ * image, location AND audio).
  */
 export function extractMessage(
   envelope: GowaEnvelope,
@@ -151,8 +154,9 @@ export function extractMessage(
   if (!body && p.image && typeof p.image === "object" && typeof p.image.caption === "string") {
     body = p.image.caption.trim();
   }
-  if (!body && !p.image && !p.location) return null; // nothing to intake
 
+  // Media reference for an image message: v9.6 sends a relative path string
+  // with auto-download, or an object with url/path.
   let imageUrl: string | null = null;
   if (p.image) {
     if (typeof p.image === "string") {
@@ -162,8 +166,23 @@ export function extractMessage(
     }
   }
 
+  // Voice/audio note (voice = PTT; both land in the audio field). Same shape
+  // as image: relative path string with auto-download, or object with url/path.
+  let audioUrl: string | null = null;
+  if (p.audio) {
+    if (typeof p.audio === "string") {
+      audioUrl = p.audio;
+    } else if (typeof p.audio === "object") {
+      audioUrl = p.audio.url ?? p.audio.path ?? null;
+    }
+  }
+
   const lat = p.location?.degreesLatitude ?? null;
   const lng = p.location?.degreesLongitude ?? null;
+
+  if (!body && !imageUrl && !audioUrl && lat == null && lng == null) {
+    return null; // nothing to intake
+  }
 
   const name = (typeof p.sender_display_name === "string" && p.sender_display_name) ||
     (typeof p.from_name === "string" && p.from_name) ||
@@ -175,6 +194,7 @@ export function extractMessage(
     name,
     body,
     imageUrl,
+    audioUrl,
     lat: typeof lat === "number" ? lat : null,
     lng: typeof lng === "number" ? lng : null,
     isGroup,

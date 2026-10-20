@@ -123,6 +123,12 @@ export interface GowaMessagePayload {
   body?: string;
   /** v9.6: string file path with auto-download, or object with url/path/caption. */
   image?: string | { url?: string; path?: string; caption?: string };
+  /**
+   * v9.6 voice/audio notes (voice = PTT, both arrive as audio): with
+   * auto-download a relative path string ("statics/media/x.ogg"), otherwise
+   * an object carrying the media url.
+   */
+  audio?: string | { url?: string; path?: string };
   location?: {
     degreesLatitude?: number;
     degreesLongitude?: number;

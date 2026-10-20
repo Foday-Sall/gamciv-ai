@@ -1,6 +1,6 @@
 /** Unit tests for the AI classification parser (tolerant JSON extraction). */
 import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { extractJsonObject, parseClassification } from "../functions/_shared/aiClient.ts";
+import { extractJsonObject, FetchAiClient, parseClassification, extractAccountId } from "../functions/_shared/aiClient.ts";
 
 Deno.test("parses strict JSON", () => {
   const r = parseClassification('{"category":"water_supply","urgency":"high","confidence":0.9}');
@@ -119,4 +119,86 @@ Deno.test("extractJsonObject handles nested braces", () => {
 
 Deno.test("extractJsonObject returns null when nothing parses", () => {
   assertEquals(extractJsonObject("plain text {broken"), null);
+});
+
+// ---------------------------------------------------------------------------
+// transcribe(): OpenAI-compat first, native Cloudflare Whisper fallback
+// ---------------------------------------------------------------------------
+
+const TRANSCRIBE_CONFIG = {
+  baseUrl: "https://api.cloudflare.com/client/v4/accounts/abc123def45678901234567890123456/ai/v1",
+  apiKey: "test-key",
+  model: "@cf/meta/llama-3.1-8b-instruct-fp8",
+  timeoutMs: 5000,
+};
+
+const AUDIO = new Uint8Array([1, 2, 3]);
+
+function jsonResponseFactory(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status });
+}
+
+Deno.test("transcribe: uses OpenAI-compat endpoint when it works", async () => {
+  const calls: Array<{ url: string; field: string | null }> = [];
+  const client = new FetchAiClient(TRANSCRIBE_CONFIG, ((url: string | URL, init?: RequestInit) => {
+    const field = init?.body instanceof FormData
+      ? ((init.body as FormData).get("file") ?? (init.body as FormData).get("audio"))
+        ? "present"
+        : null
+      : null;
+    calls.push({ url: String(url), field });
+    return Promise.resolve(jsonResponseFactory({ text: "no water in Bakoteh" }));
+  }) as typeof fetch);
+  const text = await client.transcribe(AUDIO, "voice.ogg");
+  assertEquals(text, "no water in Bakoteh");
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0].url.endsWith("/audio/transcriptions"), true);
+});
+
+Deno.test("transcribe: falls back to native CF whisper on 404 from compat endpoint", async () => {
+  const calls: Array<{ url: string; formField: string }> = [];
+  const client = new FetchAiClient(TRANSCRIBE_CONFIG, ((url: string | URL, init?: RequestInit) => {
+    const form = init?.body instanceof FormData ? (init.body as FormData) : new FormData();
+    calls.push({ url: String(url), formField: form.has("file") ? "file" : "audio" });
+    if (String(url).endsWith("/audio/transcriptions")) {
+      return Promise.resolve(jsonResponseFactory({ error: "no route" }, 404));
+    }
+    return Promise.resolve(
+      jsonResponseFactory({ result: { text: "  big pothole  " }, success: true }),
+    );
+  }) as typeof fetch);
+  const text = await client.transcribe(AUDIO, "voice.ogg");
+  assertEquals(text, "big pothole");
+  assertEquals(calls.length, 2);
+  assertEquals(calls[0].url.endsWith("/audio/transcriptions"), true);
+  assertEquals(calls[1].url.includes("/ai/run/@cf/openai/whisper"), true);
+  assertEquals(calls[1].formField, "audio");
+});
+
+Deno.test("transcribe: no fallback on non-400/404 errors", async () => {
+  const calls: string[] = [];
+  const client = new FetchAiClient(TRANSCRIBE_CONFIG, ((url: string | URL) => {
+    calls.push(String(url));
+    return Promise.resolve(jsonResponseFactory({ error: "server boom" }, 500));
+  }) as typeof fetch);
+  const text = await client.transcribe(AUDIO, "voice.ogg");
+  assertEquals(text, null);
+  assertEquals(calls.length, 1);
+});
+
+Deno.test("transcribe: empty transcript counts as failure", async () => {
+  const client = new FetchAiClient(TRANSCRIBE_CONFIG, ((_url: string | URL) => {
+    return Promise.resolve(jsonResponseFactory({ text: "   " }));
+  }) as typeof fetch);
+  assertEquals(await client.transcribe(AUDIO, "voice.ogg"), null);
+});
+
+Deno.test("extractAccountId parses the CF account id from AI_BASE_URL", () => {
+  assertEquals(
+    extractAccountId(
+      "https://api.cloudflare.com/client/v4/accounts/abc123def45678901234567890123456/ai/v1",
+    ),
+    "abc123def45678901234567890123456",
+  );
+  assertEquals(extractAccountId("https://api.openai.com/v1"), null);
 });
