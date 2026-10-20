@@ -39,7 +39,7 @@ function makeDeps(sends: SendRec[], logs: LogRec[]): EmailHookDeps {
     logDeps: {
       postgrestUrl: "http://kong:8000",
       serviceRoleKey: "service-role-key",
-      fetchImpl: (_url, init) => {
+      fetchImpl: (_url: string | URL | Request, init?: RequestInit) => {
         if (init?.body) {
           const row = JSON.parse(String(init.body)) as LogRec;
           logs.push(row);

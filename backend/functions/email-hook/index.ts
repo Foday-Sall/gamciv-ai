@@ -225,6 +225,22 @@ export async function handleHookRequest(
   return jsonResponse({});
 }
 
+// `EdgeRuntime` is a global provided only inside the Supabase edge-runtime
+// container (the dispatcher spawns user workers); declare it so `deno check`
+// passes outside that container.
+declare const EdgeRuntime: {
+  userWorkers: {
+    create(opts: {
+      servicePath: string;
+      memoryLimitMb: number;
+      workerTimeoutMs: number;
+      noModuleCache: boolean;
+      importMapPath: string | null;
+      envVars: [string, string][];
+    }): Promise<{ fetch(req: Request): Promise<Response> }>;
+  };
+};
+
 if (typeof EdgeRuntime !== "undefined") {
   Deno.serve((req: Request) =>
     handleHookRequest(req, buildDeps()).catch((e) => {
