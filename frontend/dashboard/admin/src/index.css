@@ -2,50 +2,50 @@
 @import "tw-animate-css";
 
 :root {
-  /* Admin console: dark graphite surfaces with a restrained green accent.
+  /* Admin console: clean light surfaces with a restrained green accent.
      One administrator, institution accounts, audit-first UI. */
-  --background: #0a0e14;
-  --foreground: #e6ebf2;
+  --background: #f7f8fa;
+  --foreground: #16202b;
 
-  --card: #101620;
-  --card-foreground: #e6ebf2;
+  --card: #ffffff;
+  --card-foreground: #16202b;
 
-  --popover: #131a26;
-  --popover-foreground: #e6ebf2;
+  --popover: #ffffff;
+  --popover-foreground: #16202b;
 
-  --primary: #2f9e6e;
-  --primary-foreground: #06130d;
+  --primary: #22885c;
+  --primary-foreground: #ffffff;
 
-  --secondary: #1a2230;
-  --secondary-foreground: #e6ebf2;
+  --secondary: #eef1f5;
+  --secondary-foreground: #16202b;
 
-  --muted: #1a2230;
-  --muted-foreground: #8a94a6;
+  --muted: #eef1f5;
+  --muted-foreground: #5c6875;
 
-  --accent: #26354a;
-  --accent-foreground: #e6ebf2;
+  --accent: #e6f2ec;
+  --accent-foreground: #123d2b;
 
-  --destructive: #e5484d;
+  --destructive: #d33d42;
   --destructive-foreground: #ffffff;
 
-  --border: #1f2735;
-  --input: #232d3d;
-  --ring: #2f9e6e;
+  --border: #e2e6ec;
+  --input: #e6eaef;
+  --ring: #22885c;
 
   --radius: 0.625rem;
 
   /* Working colors used by badges, charts and status marks */
-  --ok: #2f9e6e;
-  --warn: #d9a03f;
-  --danger: #e5484d;
-  --info: #4f8fd9;
+  --ok: #22885c;
+  --warn: #b97d1f;
+  --danger: #d33d42;
+  --info: #2f6fb8;
 
   /* Chart series tints */
-  --chart-1: #2f9e6e;
-  --chart-2: #4f8fd9;
-  --chart-3: #d9a03f;
-  --chart-4: #b06bd8;
-  --chart-5: #e5484d;
+  --chart-1: #22885c;
+  --chart-2: #2f6fb8;
+  --chart-3: #b97d1f;
+  --chart-4: #9255c9;
+  --chart-5: #d33d42;
 }
 
 @theme inline {
@@ -90,7 +90,7 @@
     @apply border-border outline-ring/50;
   }
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
   body {
     @apply bg-background text-foreground;
@@ -98,7 +98,7 @@
     line-height: 1.6;
   }
   ::selection {
-    background: rgba(47, 158, 110, 0.28);
+    background: rgba(34, 136, 92, 0.22);
   }
 }
 
@@ -106,17 +106,17 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
-  /* Subtle top highlight on dark cards */
+  /* Subtle top highlight on cards (neutral on light) */
   .card-sheen {
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 40%);
+    background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.012), rgba(0, 0, 0, 0) 40%);
   }
-  /* Slim scrollbar for the dark shell */
+  /* Slim scrollbar */
   .slim-scroll::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
   .slim-scroll::-webkit-scrollbar-thumb {
-    background: #232d3d;
+    background: #c9d1da;
     border-radius: 8px;
   }
   .slim-scroll::-webkit-scrollbar-track {
