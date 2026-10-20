@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/secretsClient"
 import { resolveSessionRole, type SessionInfo } from "@/lib/authGate"
 
-type Mode = "choose" | "otp-email" | "otp-code" | "password"
+type Mode = "choose" | "otp-email" | "otp-code" | "password" | "reset-email" | "reset-code"
 
 const OTP_LENGTH = 6
 
@@ -57,6 +57,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [code, setCode] = useState("")
   const [password, setPassword] = useState("")
+  // Recovery flow: the new password typed on the reset-code screen.
+  const [newPassword, setNewPassword] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sentTo, setSentTo] = useState<string | null>(null)
@@ -156,6 +158,69 @@ export default function LoginPage() {
       setError(authErrorText(err.message))
       return
     }
+    const info = await resolveSessionRole()
+    if (!(await routeByRole(info))) {
+      navigate("/app/login", { replace: true })
+    }
+  }
+
+  /** Send the recovery email (GoTrue recovery → 6-digit code via the hook). */
+  async function requestReset(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (!email.trim()) {
+      setError("Enter the email your GamCiv account was issued to.")
+      return
+    }
+    setBusy(true)
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim())
+    setBusy(false)
+    if (err) {
+      setError(authErrorText(err.message))
+      return
+    }
+    setSentTo(email.trim())
+    setMode("reset-code")
+  }
+
+  /** Verify the recovery code and set the new password in one step. */
+  async function completeReset(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (code.trim().length !== OTP_LENGTH) {
+      setError(`Enter the ${OTP_LENGTH}-digit code from the reset email.`)
+      return
+    }
+    if (newPassword.length < 6) {
+      setError("Choose a new password of at least 6 characters.")
+      return
+    }
+    setBusy(true)
+    const { error: err } = await supabase.auth.verifyOtp({
+      email: (sentTo ?? email).trim(),
+      token: code.trim(),
+      type: "recovery",
+    })
+    if (err) {
+      setBusy(false)
+      setError(
+        /expired/i.test(err.message)
+          ? "That reset code has expired. Request a new one."
+          : /invalid/i.test(err.message)
+            ? "That code is not right. Check the latest reset email and try again."
+            : authErrorText(err.message),
+      )
+      return
+    }
+    const { error: updateErr } = await supabase.auth.updateUser({
+      password: newPassword,
+    })
+    setBusy(false)
+    if (updateErr) {
+      setError(authErrorText(updateErr.message))
+      return
+    }
+    // Password changed — route by role from the fresh session.
     const info = await resolveSessionRole()
     if (!(await routeByRole(info))) {
       navigate("/app/login", { replace: true })
@@ -271,6 +336,103 @@ export default function LoginPage() {
             </form>
           )}
 
+          {mode === "reset-email" && (
+            <form onSubmit={requestReset} className="space-y-4">
+              <div className="text-center">
+                <KeyRound className="mx-auto h-10 w-10 text-primary" aria-hidden="true" />
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Enter your account email and we'll send a 6-digit reset code.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="reset-email-input" className="block text-sm font-medium">
+                  Email
+                </label>
+                <Input
+                  id="reset-email-input"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <Button type="submit" className="h-11 w-full" disabled={busy}>
+                {busy ? busySpinner : null}
+                Send reset code
+              </Button>
+              <div className="text-center">
+                <button
+                  type="button"
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setMode("password")
+                    setError(null)
+                  }}
+                >
+                  Back to sign in
+                </button>
+              </div>
+            </form>
+          )}
+
+          {mode === "reset-code" && (
+            <form onSubmit={completeReset} className="space-y-4">
+              <div className="text-center">
+                <ShieldCheck className="mx-auto h-10 w-10 text-primary" aria-hidden="true" />
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Enter the 6-digit code sent to{" "}
+                  <span className="font-medium text-foreground">{sentTo}</span>
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">It expires in 15 minutes.</p>
+              </div>
+              <Input
+                id="reset-code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={OTP_LENGTH}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="······"
+                className="text-center font-mono text-lg tracking-[0.5em]"
+                required
+              />
+              <div className="space-y-1.5">
+                <label htmlFor="new-password" className="block text-sm font-medium">
+                  New password
+                </label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  minLength={6}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">At least 6 characters.</p>
+              </div>
+              <Button type="submit" className="h-11 w-full" disabled={busy}>
+                {busy ? busySpinner : null}
+                Set new password and sign in
+              </Button>
+              <div className="text-center">
+                <button
+                  type="button"
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setMode("reset-email")
+                    setCode("")
+                    setNewPassword("")
+                    setError(null)
+                  }}
+                >
+                  Back
+                </button>
+              </div>
+            </form>
+          )}
+
           {mode === "password" && (
             <form onSubmit={signInWithPassword} className="space-y-4">
               <div className="space-y-1.5">
@@ -303,10 +465,10 @@ export default function LoginPage() {
                 {busy ? busySpinner : null}
                 Sign in
               </Button>
-              <div className="text-center">
+              <div className="flex items-center justify-between text-sm">
                 <button
                   type="button"
-                  className="text-sm text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground"
                   onClick={() => {
                     setMode("choose")
                     setPassword("")
@@ -314,6 +476,16 @@ export default function LoginPage() {
                   }}
                 >
                   Use a one-time code instead
+                </button>
+                <button
+                  type="button"
+                  className="text-primary hover:underline"
+                  onClick={() => {
+                    setMode("reset-email")
+                    setError(null)
+                  }}
+                >
+                  Forgot password?
                 </button>
               </div>
             </form>

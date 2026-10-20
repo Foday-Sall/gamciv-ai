@@ -46,6 +46,8 @@ const NETWORK_HINT = 'Connection problem. Check your internet and try again.'
 /**
  * Turn a failed send-phone-otp response into an honest message: the real
  * reason (invalid number vs rate limit) instead of a generic network error.
+ * The edge functions return errors as { error: "..." } (older deployments)
+ * or { error, message } (newer); read both.
  */
 function classifySendError(status: number, message: string | undefined): string {
   const m = (message ?? '').toLowerCase()
@@ -61,6 +63,9 @@ function classifySendError(status: number, message: string | undefined): string 
     m.includes('not on whatsapp')
   ) {
     return FULL_NUMBER_HINT
+  }
+  if (status === 409 || m.includes('already verified')) {
+    return 'That number is already verified on another account. Use it with that account or sign in.'
   }
   // Anything else: show the server's actual message.
   return message && message.trim().length > 0 ? message : 'Could not send the code. Try again.'
@@ -116,9 +121,9 @@ export default function VerifyPhone() {
         `${(import.meta.env.VITE_SUPABASE_URL as string).replace(/\/+$/, '')}/functions/v1/auth-verify/send-phone-otp`,
         { method: 'POST', headers, body: JSON.stringify({ phone: normalized }) },
       )
-      const body = (await res.json().catch(() => ({}))) as { message?: string }
+      const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string }
       if (!res.ok) {
-        setError(classifySendError(res.status, body.message))
+        setError(classifySendError(res.status, body.error ?? body.message))
         return
       }
       setStage('code')
@@ -150,15 +155,15 @@ export default function VerifyPhone() {
           body: JSON.stringify({ phone: normalizePhone(phone), code: token.trim() }),
         },
       )
-      const body = (await res.json().catch(() => ({}))) as { message?: string }
+      const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string }
       if (!res.ok) {
-        const m = (body.message ?? '').toLowerCase()
+        const m = (body.error ?? body.message ?? '').toLowerCase()
         if (res.status === 429 || m.includes('too many')) setError(RATE_LIMIT_HINT)
         else if (m.includes('no active code')) setError('No active code. Request a new one.')
         else if (m.includes('expired')) setError('That code expired. Request a new one.')
         else if (m.includes('not correct') || m.includes('did not match')) {
           setError('That code is not correct. Check and try again.')
-        } else setError(body.message ?? 'That code did not match. Check and try again.')
+        } else setError(body.error ?? body.message ?? 'That code did not match. Check and try again.')
         return
       }
       navigate('/home', { replace: true })

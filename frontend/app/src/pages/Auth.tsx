@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
-import { supabase, getProfile, routeByRole, STAFF_DASHBOARD_URL } from '@/lib/supabase'
+import { supabase, getProfile, routeByRole, STAFF_DASHBOARD_URL, OFFICER_DASHBOARD_URL } from '@/lib/supabase'
 import { friendlyAuthError } from '@/lib/authErrors'
 import GamCivMark from '@/components/GamCivMark'
 import { Button } from '@/components/ui/button'
@@ -157,7 +157,8 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
   }, [location.key])
 
   // A staff member who lands on this login page with an existing session
-  // belongs in the dashboard; a signed-in citizen continues into the app.
+  // belongs in the dashboard (officers to their institution's dashboard,
+  // admins to the console); a signed-in citizen continues into the app.
   // Runs once on mount. Staff: full navigation keeps the session intact.
   useEffect(() => {
     let cancelled = false
@@ -165,7 +166,9 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
       if (cancelled || !session) return
       const role = await getProfile(session.user.id).then((p) => p?.role)
       if (cancelled) return
-      if (role === 'officer' || role === 'admin') {
+      if (role === 'officer') {
+        window.location.href = OFFICER_DASHBOARD_URL
+      } else if (role === 'admin') {
         window.location.href = STAFF_DASHBOARD_URL
       } else if (role === 'citizen') {
         navigate('/home', { replace: true })
@@ -211,7 +214,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
           // New signups are citizens by default (the signup trigger sets the
           // role), but respect the actual profile role just in case.
           const routed = await routeByRole(data.session.user.id)
-          if (routed !== 'staff') {
+          if (routed !== 'officer' && routed !== 'admin') {
             // New accounts must confirm their email (OTP) before using the app.
             navigate('/verify/email', { replace: true })
           }
@@ -249,7 +252,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
         const routed = loginData.session
           ? await routeByRole(loginData.session.user.id)
           : null
-        if (routed !== 'staff') {
+        if (routed !== 'officer' && routed !== 'admin') {
           // Unconfirmed email? Send to the OTP verification screen first.
           const unconfirmed =
             loginData.session?.user?.email_confirmed_at == null &&

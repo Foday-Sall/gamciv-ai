@@ -25,7 +25,9 @@ export function jsonResponse(
 }
 
 export function errorResponse(status: number, message: string): Response {
-  return jsonResponse({ error: message }, status);
+  // Both keys carry the same text: `error` for programmatic callers,
+  // `message` for browser clients that read one field (the auth screens).
+  return jsonResponse({ error: message, message }, status);
 }
 
 /** Parse a request body as JSON; returns null on invalid/empty JSON. */
