@@ -573,3 +573,110 @@ export async function saveSettings(data: AdminSettings): Promise<void> {
   SETTINGS.escalationThresholds = { ...data.escalationThresholds }
   SETTINGS.notifications = { ...data.notifications }
 }
+
+// ---------------------------------------------------------------------------
+// Secrets manager (admin-secrets edge function)
+// ---------------------------------------------------------------------------
+
+export interface SecretEntry {
+  key: string
+  set: boolean
+  updatedAt: string | null
+}
+
+export interface SecretsStatus {
+  ok: boolean
+  keysManaged: number
+  lastReloadOk: boolean | null
+  lastReloadAt: number | null
+}
+
+export interface SecretsAuditEntry {
+  id: string
+  action: string
+  key: string
+  createdAt: string
+  adminEmail: string | null
+}
+
+const SECRETS_URL = "https://api.pocketsoftware.dev/functions/v1/admin-secrets"
+
+/**
+ * Call the admin-secrets edge function with the current admin session.
+ * Shares the same-origin supabase session used by the citizen app.
+ */
+async function secretsCall(
+  action: string,
+  params: Record<string, unknown> = {}
+): Promise<Record<string, unknown>> {
+  const { supabase } = await import("./secretsClient")
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) throw new Error("Not signed in")
+  const res = await fetch(SECRETS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ action, params }),
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error || `Request failed (${res.status})`)
+  }
+  return (await res.json()) as Record<string, unknown>
+}
+
+export async function listSecrets(): Promise<SecretEntry[]> {
+  const payload = await secretsCall("list")
+  const entries = (payload.data as { entries?: Array<{ key: string; set: boolean; updated_at: string | null }> })
+    ?.entries ?? []
+  return entries.map((entry) => ({
+    key: entry.key,
+    set: entry.set,
+    updatedAt: entry.updated_at,
+  }))
+}
+
+export async function getSecretsStatus(): Promise<SecretsStatus> {
+  const payload = await secretsCall("get_status")
+  const data = payload.data as {
+    ok?: boolean
+    keys_managed?: number
+    last_reload_ok?: boolean | null
+    last_reload_at?: number | null
+  }
+  return {
+    ok: Boolean(data?.ok),
+    keysManaged: data?.keys_managed ?? 0,
+    lastReloadOk: data?.last_reload_ok ?? null,
+    lastReloadAt: data?.last_reload_at ?? null,
+  }
+}
+
+export async function setSecret(key: string, value: string): Promise<void> {
+  await secretsCall("set", { key, value })
+}
+
+export async function deleteSecret(key: string): Promise<void> {
+  await secretsCall("delete", { key })
+}
+
+export async function getSecretsAudit(limit = 50): Promise<SecretsAuditEntry[]> {
+  const payload = await secretsCall("get_audit", { limit })
+  const rows = (payload.data as Array<{
+    id: string
+    action: string
+    key: string
+    created_at: string
+    admin_email: string | null
+  }>) ?? []
+  return rows.map((row) => ({
+    id: row.id,
+    action: row.action,
+    key: row.key,
+    createdAt: row.created_at,
+    adminEmail: row.admin_email,
+  }))
+}

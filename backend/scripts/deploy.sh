@@ -12,8 +12,8 @@ REMOTE_TMP="/tmp/gamciv-functions.tgz"
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 
-# 1) Package the functions tree (main dispatcher, _shared, intake/notify, admin-api, auth-verify, email-hook)
-tar czf "$REMOTE_TMP" -C "$HERE/functions" main _shared whatsapp-intake notify-out telegram-intake admin-api auth-verify email-hook meta-whatsapp-intake
+# 1) Package the functions tree (main dispatcher, _shared, intake/notify, admin-api, admin-secrets, auth-verify, email-hook)
+tar czf "$REMOTE_TMP" -C "$HERE/functions" main _shared whatsapp-intake notify-out telegram-intake admin-api admin-secrets auth-verify email-hook meta-whatsapp-intake
 
 # 2) Ship + extract + fix ownership
 scp -i "$SSH_KEY" -q "$REMOTE_TMP" "$VPS_HOST:$REMOTE_TMP"

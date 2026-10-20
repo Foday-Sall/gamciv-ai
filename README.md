@@ -220,6 +220,30 @@ Names only, no values. Nothing is committed: every env file in the repo is an `*
 |---|---|
 | `VPS_HOST`, `SSH_KEY` | Parameterized, read from the environment, never committed |
 
+## Secrets manager (admin panel)
+
+API keys and secret values are managed from the admin panel's Settings page
+instead of editing `.env.functions` by hand:
+
+- **Storage:** values live only in `/opt/supabase/docker/.env.functions` on the
+  VPS (chmod 600). They never touch the database or the browser.
+- **Flow:** the panel calls the `admin-secrets` edge function with an admin
+  session; the function forwards whitelisted actions to the secrets bridge
+  daemon (`secrets_bridge.py`, a systemd service on the VPS host), which
+  rewrites the env file atomically and recreates the functions container in
+  the background so new values apply immediately.
+- **Audit:** every set/delete is recorded in `public.admin_secret_audit`
+  (key name, action, acting admin) via migration
+  [0013_admin_secrets_audit.sql](backend/db/0013_admin_secrets_audit.sql).
+  Values are never logged.
+- **Key policy:** named keys (Resend, AI, GOWA, Telegram, bridge token) plus
+  generic `CUSTOM_*` keys. `SECRET_BRIDGE_TOKEN` can be rotated but never
+  deleted.
+- **Setup on the VPS:** `backend/scripts/setup_secrets_bridge.sh` (idempotent)
+  generates the bridge token, wires `SECRET_BRIDGE_TOKEN` /
+  `SECRET_BRIDGE_URL` into `.env.functions`, opens tcp/8790 from the docker
+  bridge only, and installs the `secrets-bridge` systemd service.
+
 ## Testing
 
 - **Backend:** `deno lint` and `deno test --allow-all` in `backend/`. The suite covers the classifier parser, webhook HMAC verification, envelope extraction, the intake and notify-out pipelines and the GoTrue email hook, all with stubbed network dependencies. `deno check --all` validates function entry points.
