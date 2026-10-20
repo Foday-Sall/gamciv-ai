@@ -35,7 +35,7 @@ import {
 import { SignOutDialog } from '@/components/ConfirmDialogs'
 import PageTransition from '@/components/PageTransition'
 import { useSession, useDisplayName } from '@/hooks/useSession'
-import { supabase, getProfile, STAFF_DASHBOARD_URL } from '@/lib/supabase'
+import { supabase, getProfile, STAFF_DASHBOARD_URL, OFFICER_DASHBOARD_URL } from '@/lib/supabase'
 import GamCivMark from '@/components/GamCivMark'
 import { toast } from 'sonner'
 
@@ -75,14 +75,17 @@ export default function AppShell() {
   const email = session?.user?.email ?? null
 
   // A signed-in staff member (officer/admin) browsing the citizen app should
-  // be sent to the dashboard. Runs once per session; no redirect while the
+  // be sent to the dashboard: officers to their institution's dashboard,
+  // admins to the console. Runs once per session; no redirect while the
   // profile lookup fails (do not bounce people over a transient error).
   useEffect(() => {
     if (!session?.user?.id) return
     let cancelled = false
     getProfile(session.user.id).then((p) => {
       if (cancelled) return
-      if (p?.role === 'officer' || p?.role === 'admin') {
+      if (p?.role === 'officer') {
+        window.location.href = OFFICER_DASHBOARD_URL
+      } else if (p?.role === 'admin') {
         window.location.href = STAFF_DASHBOARD_URL
       }
     })

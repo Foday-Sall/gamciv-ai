@@ -20,8 +20,16 @@ export const supabase = createClient(url, anonKey, {
   },
 })
 
-/** Where staff accounts (officer/admin) belong after signing in. */
-export const STAFF_DASHBOARD_URL = 'https://dashboard.pocketsoftware.dev/dashboard/'
+/**
+ * Dashboard paths on this same origin (gamciv.pocketsoftware.dev). The
+ * dedicated dashboard.pocketsoftware.dev domain is retired: the dashboard
+ * app is served from /dashboard/ here, and /app/login is the single login
+ * page for everyone. Role decides where a signed-in user lands:
+ *   officer -> /dashboard/institute (their institution's dashboard)
+ *   admin   -> /dashboard/          (full administrator console)
+ */
+export const STAFF_DASHBOARD_URL = 'https://gamciv.pocketsoftware.dev/dashboard/'
+export const OFFICER_DASHBOARD_URL = 'https://gamciv.pocketsoftware.dev/dashboard/institute'
 
 /**
  * The profiles table is keyed by `user_id` (not `id`) and has no `phone`
@@ -82,16 +90,24 @@ export async function handleAuthExpired(): Promise<void> {
 
 /**
  * Route the signed-in user to the right place for their role.
- * Staff (officer/admin) belong in the dashboard — a full navigation, so we
- * leave the app entirely. Citizens and unknown-role users stay here.
+ * /app/login is the single login page for everyone; the role decides where
+ * they land (same origin, so the session carries over):
+ *   officer -> /dashboard/institute (their institution's dashboard)
+ *   admin   -> /dashboard/          (full administrator console)
+ * Staff get a full navigation so we leave the app entirely. Citizens and
+ * unknown-role users stay here.
  * Returns the profile's role (or null when the lookup failed).
  */
-export async function routeByRole(userId: string): Promise<'citizen' | 'staff' | null> {
+export async function routeByRole(userId: string): Promise<'citizen' | 'officer' | 'admin' | null> {
   const profile = await getProfile(userId)
   const role = profile?.role
-  if (role === 'officer' || role === 'admin') {
+  if (role === 'officer') {
+    window.location.href = OFFICER_DASHBOARD_URL
+    return 'officer'
+  }
+  if (role === 'admin') {
     window.location.href = STAFF_DASHBOARD_URL
-    return 'staff'
+    return 'admin'
   }
   return role === 'citizen' ? 'citizen' : null
 }
