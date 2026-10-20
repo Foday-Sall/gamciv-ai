@@ -142,7 +142,7 @@ function StatCard({
   tone: string
 }) {
   return (
-      <Card className="h-full border-border/90 shadow-none">
+      <Card className="card-sheen h-full border-border/90 shadow-none transition-shadow hover:shadow-sm">
         <CardContent className="p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -155,7 +155,7 @@ function StatCard({
               <Icon className="h-5 w-5" aria-hidden="true" />
             </span>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">{hint}</p>
+          <p className="mt-3 text-xs leading-5 text-muted-foreground">{hint}</p>
         </CardContent>
       </Card>
   )
@@ -554,14 +554,17 @@ export default function InstitutionDashboard() {
     >
       <header className="mb-5 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">Institution workspace</Badge>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">
+              <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+              {dataLoading ? "Syncing live data" : statsError || feedError ? "Limited connection" : "Live institution data"}
+            </Badge>
           </div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-            Complaint overview
+            {institution?.name ?? "Institution"} operations
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Reports, response trends, and workload assigned to {institution?.name ?? "your institution"}.
+            Monitor incoming reports, service demand, and response progress in one place.
           </p>
         </div>
       </header>
@@ -601,16 +604,16 @@ export default function InstitutionDashboard() {
       <section
         id="overview"
         className="scroll-mt-8 grid grid-cols-2 gap-3 max-[359px]:grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
-        aria-label="Institution complaint summary"
+        aria-label="Complaint operations summary"
       >
         {statCards.map((item) => (
           <StatCard key={item.label} {...item} />
         ))}
       </section>
 
-      <section id="analytics" className="mt-5 scroll-mt-32" aria-label="Institution complaint analytics">
+      <section id="analytics" className="mt-6 scroll-mt-32" aria-label="Complaint analytics and service demand">
       <div className="grid gap-4 xl:grid-cols-2">
-        <ChartCard title="Complaint trend" description="Daily reports received and resolved">
+        <ChartCard title="Intake and resolution trend" description="Daily reports received versus resolved">
           {statsError ? (
             <EmptyChart>Trend data is unavailable until the analytics service reconnects.</EmptyChart>
           ) : visibleTrendData.length === 0 ? (
@@ -700,7 +703,7 @@ export default function InstitutionDashboard() {
           )}
         </ChartCard>
 
-        <ChartCard title="Case status" description="How your institution's assigned workload is progressing">
+        <ChartCard title="Workload by status" description="How assigned reports are progressing">
           {statsError ? (
             <EmptyChart>Status data is unavailable until the analytics service reconnects.</EmptyChart>
           ) : statusData.length === 0 ? (
@@ -720,7 +723,7 @@ export default function InstitutionDashboard() {
           )}
         </ChartCard>
 
-        <ChartCard title="Complaints by category" description="Most reported categories assigned to this institution">
+        <ChartCard title="Demand by category" description="Most reported service areas assigned here">
           {statsError ? (
             <EmptyChart>Category data is unavailable until the analytics service reconnects.</EmptyChart>
           ) : categoryData.length === 0 ? (
@@ -740,7 +743,7 @@ export default function InstitutionDashboard() {
           )}
         </ChartCard>
 
-        <ChartCard title="Intake channels" description="How complaints assigned to your institution were submitted">
+        <ChartCard title="Submission channels" description="How citizens submitted reports to this institution">
           {statsError ? (
             <EmptyChart>Channel data is unavailable until the analytics service reconnects.</EmptyChart>
           ) : channelData.length === 0 ? (
@@ -762,17 +765,17 @@ export default function InstitutionDashboard() {
       </div>
       </section>
 
-      <section id="complaints" className="mt-6 scroll-mt-32" aria-labelledby="recent-complaints-heading">
+      <section id="complaints" className="mt-8 scroll-mt-32" aria-labelledby="recent-complaints-heading">
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div>
             <div className="flex items-center gap-2">
               <Inbox className="h-5 w-5 text-primary" aria-hidden="true" />
-              <h2 id="recent-complaints-heading" className="font-display text-lg font-semibold">Recent complaints</h2>
+              <h2 id="recent-complaints-heading" className="font-display text-lg font-semibold">Complaint queue</h2>
               <Badge variant="secondary">{stats ? stats.total : "—"} total</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Latest reports assigned to {institution?.name ?? "your institution"}; the full count above comes from the secured analytics API.
+              Review the latest reports assigned to {institution?.name ?? "your institution"}. The total is supplied by the secured analytics service.
             </p>
           </div>
           <div className="relative w-full sm:max-w-xs">
@@ -780,7 +783,7 @@ export default function InstitutionDashboard() {
             <Input
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
-              placeholder="Search reference, title, status"
+              placeholder="Search by reference, title, or status"
               className="pl-9"
               aria-label="Search this institution's complaints"
             />
@@ -804,11 +807,11 @@ export default function InstitutionDashboard() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Reference</TableHead>
-                  <TableHead>Complaint</TableHead>
+                  <TableHead>Issue</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Priority</TableHead>
                   <TableHead>Received</TableHead>
-                  <TableHead className="text-right">Updated</TableHead>
+                  <TableHead className="text-right">Last updated</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -843,8 +846,8 @@ export default function InstitutionDashboard() {
           </div>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-5 py-3 text-xs text-muted-foreground sm:px-6">
-          <span>Showing {visibleRows.length} of up to 200 recent records in this table.</span>
-          <span className="inline-flex items-center gap-1.5"><TrendingUp className="h-3.5 w-3.5" aria-hidden="true" /> Analytics use all institution records.</span>
+          <span>Showing {visibleRows.length} of the 200 most recent records.</span>
+          <span className="inline-flex items-center gap-1.5"><TrendingUp className="h-3.5 w-3.5" aria-hidden="true" /> Analytics include all institution records.</span>
         </div>
       </Card>
 

@@ -26,9 +26,9 @@ const sections: Array<{
   description: string
   Icon: typeof LayoutDashboard
 }> = [
-  { id: "overview", label: "Overview", description: "Your complaint summary", Icon: LayoutDashboard },
-  { id: "analytics", label: "Analytics", description: "Trends and categories", Icon: ChartNoAxesCombined },
-  { id: "complaints", label: "Complaints", description: "Recent reports", Icon: ClipboardList },
+  { id: "overview", label: "Dashboard", description: "Live workload overview", Icon: LayoutDashboard },
+  { id: "analytics", label: "Analytics", description: "Trends and service demand", Icon: ChartNoAxesCombined },
+  { id: "complaints", label: "Complaint queue", description: "Review and triage reports", Icon: ClipboardList },
 ]
 
 export function OfficerShell({
@@ -73,8 +73,8 @@ export function OfficerShell({
   function Navigation({ mobile = false }: { mobile?: boolean }) {
     return (
       <nav aria-label="Officer navigation" className="space-y-1 px-3 py-4">
-        <p className={cn("px-3 pb-2 text-xs font-medium text-muted-foreground", !mobile && collapsed && "sr-only")}>
-          Workspace
+        <p className={cn("px-3 pb-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground", !mobile && collapsed && "sr-only")}>
+          Institution portal
         </p>
         {sections.map(({ id, label, description, Icon }) => {
           const active = (manualActiveSection ?? activeSection) === id
@@ -118,7 +118,7 @@ export function OfficerShell({
           <Building2 className="h-[18px] w-[18px]" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">GamCiv</p>
+          <p className="truncate text-sm font-semibold text-foreground">GamCiv operations</p>
           <p className="truncate text-xs text-muted-foreground">{institutionName}</p>
         </div>
       </div>
@@ -182,12 +182,12 @@ export function OfficerShell({
             <Menu className="h-5 w-5" aria-hidden="true" />
           </Button>
           <div className="min-w-0 flex-1 md:hidden">
-            <p className="truncate text-sm font-semibold">GamCiv</p>
+            <p className="truncate text-sm font-semibold">GamCiv operations</p>
             <p className="truncate text-xs text-muted-foreground">{institutionName}</p>
           </div>
           <div className="hidden min-w-0 flex-1 md:block">
             <p className="truncate text-sm font-medium">{institutionName}</p>
-            <p className="text-xs text-muted-foreground">Institution workspace</p>
+            <p className="text-xs text-muted-foreground">Live institution data</p>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={refreshing}>
             <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
