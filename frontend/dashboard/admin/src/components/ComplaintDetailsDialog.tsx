@@ -61,10 +61,12 @@ export function ComplaintDetailsDialog({
   complaintId,
   onOpenChange,
   onStatusUpdated,
+  refreshSignal = 0,
 }: {
   complaintId: string | null
   onOpenChange: (open: boolean) => void
   onStatusUpdated?: () => void
+  refreshSignal?: number
 }) {
   const [complaint, setComplaint] = useState<ComplaintDetail | null>(null)
   const [loading, setLoading] = useState(false)
@@ -139,7 +141,7 @@ export function ComplaintDetailsDialog({
     })()
 
     return () => controller.abort()
-  }, [complaintId, retry])
+  }, [complaintId, retry, refreshSignal])
 
   const contact = complaint?.is_anonymous ? null : complaint?.contact
   const phone = contact?.phone?.trim() || null

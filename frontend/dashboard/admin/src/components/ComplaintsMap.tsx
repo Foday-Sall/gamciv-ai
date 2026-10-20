@@ -69,9 +69,11 @@ function MapViewportReporter({ onChange }: { onChange: (bounds: Bounds) => void 
 export function ComplaintsMap({
   onSelectComplaint,
   heightClass = "h-[360px] sm:h-[430px]",
+  refreshSignal = 0,
 }: {
   onSelectComplaint?: (complaintId: string) => void
   heightClass?: string
+  refreshSignal?: number
 }) {
   const [bounds, setBounds] = useState<Bounds | null>(null)
   const [complaints, setComplaints] = useState<MapComplaint[]>([])
@@ -144,7 +146,7 @@ export function ComplaintsMap({
       window.clearTimeout(timeoutId)
       controller.abort()
     }
-  }, [bounds, retry])
+  }, [bounds, retry, refreshSignal])
 
   return (
     <div>

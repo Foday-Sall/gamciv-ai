@@ -223,6 +223,7 @@ export default function InstitutionDashboard() {
   const [showResolved, setShowResolved] = useState(true)
   const [activeSection, setActiveSection] = useState<"overview" | "map" | "analytics" | "complaints">("overview")
   const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null)
+  const [complaintRefreshSignal, setComplaintRefreshSignal] = useState(0)
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() =>
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
   )
@@ -401,7 +402,10 @@ export default function InstitutionDashboard() {
           table: "complaints",
           filter: `institution_id=eq.${institution.id}`,
         },
-        () => void loadDashboard(institution.id),
+        () => {
+          setComplaintRefreshSignal((signal) => signal + 1)
+          void loadDashboard(institution.id)
+        },
       )
       .subscribe()
     return () => {
@@ -705,6 +709,7 @@ export default function InstitutionDashboard() {
               <ComplaintsMap
                 heightClass="h-[360px] sm:h-[470px]"
                 onSelectComplaint={setSelectedComplaintId}
+                refreshSignal={complaintRefreshSignal}
               />
             </CardContent>
           </Card>
@@ -1063,6 +1068,7 @@ export default function InstitutionDashboard() {
       </motion.section>
       <ComplaintDetailsDialog
         complaintId={selectedComplaintId}
+        refreshSignal={complaintRefreshSignal}
         onOpenChange={(open) => { if (!open) setSelectedComplaintId(null) }}
         onStatusUpdated={() => { if (institution) void loadDashboard(institution.id) }}
       />

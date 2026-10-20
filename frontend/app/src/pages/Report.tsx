@@ -137,6 +137,8 @@ export default function Report() {
   const [location, setLocation] = useState<LocationState>(EMPTY_LOCATION)
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<SubmitResult | null>(null)
+  const [photoUploadFailed, setPhotoUploadFailed] = useState(false)
+  const [retryingPhotoUpload, setRetryingPhotoUpload] = useState(false)
   const [gpsState, setGpsState] = useState<'idle' | 'locating' | 'ok' | 'error'>('idle')
   const [copied, setCopied] = useState(false)
   const [centralId, setCentralId] = useState('')
@@ -153,6 +155,8 @@ export default function Report() {
     setUrgency('normal')
     setPhotoFile(null)
     setPhotoPreview(null)
+    setPhotoUploadFailed(false)
+    setRetryingPhotoUpload(false)
     setLocation(EMPTY_LOCATION)
     setResult(null)
     setCopied(false)
@@ -334,6 +338,19 @@ export default function Report() {
     setConfirmOpen(false)
     setSubmitting(true)
     try {
+      if (photoFile) {
+        const { data: accessData, error: accessError } = await supabase.rpc('fn_dashboard_access')
+        if (accessError) {
+          toast.error('We could not verify your citizen account. Please try again.')
+          return
+        }
+        const access = accessData as { ok?: boolean; role?: string | null } | null
+        if (!access?.ok || access.role !== 'citizen') {
+          toast.error('Sign in with your citizen account before sending a report with a photo. App and dashboard tabs in this browser share one sign-in.')
+          return
+        }
+      }
+
       // Idempotency key: one per fill-out of the form. If the request is lost
       // in transit and the person taps Send again, the backend returns the
       // already-created report instead of filing a duplicate.
@@ -388,20 +405,10 @@ export default function Report() {
 
       const res = data as SubmitResult
       if (photoFile) {
-        const path = await uploadPhoto(res.complaint_id, photoFile)
-        if (path) {
-          // Citizens cannot update complaint rows (RLS), so the path is attached
-          // through a SECURITY DEFINER RPC that checks ownership.
-          const { data: attached, error: attachError } = await supabase.rpc('attach_photo', {
-            p_complaint_id: res.complaint_id,
-            p_path: path,
-          })
-          if (attachError || attached !== true) {
-            console.error('attach_photo failed:', attachError?.message ?? 'ownership check failed')
-            toast.warning('Report filed, but the photo could not be attached.')
-          }
-        } else {
-          toast.warning('Report filed, but the photo upload failed. You can still track it.')
+        const attached = await uploadAndAttachPhoto(res.complaint_id, photoFile)
+        setPhotoUploadFailed(!attached)
+        if (!attached) {
+          toast.warning('Report filed, but its photo was not attached. Retry the photo upload on the confirmation screen.')
         }
       }
 
@@ -434,6 +441,56 @@ export default function Report() {
       return null
     }
     return path
+  }
+
+  async function uploadAndAttachPhoto(complaintId: string, file: File): Promise<boolean> {
+    try {
+      const path = await uploadPhoto(complaintId, file)
+      if (!path) return false
+
+      // Citizens cannot update complaint rows (RLS), so the path is attached
+      // through a SECURITY DEFINER RPC that checks ownership.
+      const { data: attached, error: attachError } = await supabase.rpc('attach_photo', {
+        p_complaint_id: complaintId,
+        p_path: path,
+      })
+      if (attachError || attached !== true) {
+        console.error('attach_photo failed:', attachError?.message ?? 'ownership check failed')
+        return false
+      }
+      return true
+    } catch {
+      console.error('photo upload or attachment failed')
+      return false
+    }
+  }
+
+  async function retryPhotoAttachment() {
+    if (!result || !photoFile || retryingPhotoUpload) return
+    let accessData: unknown
+    try {
+      const accessResult = await supabase.rpc('fn_dashboard_access')
+      if (accessResult.error) throw accessResult.error
+      accessData = accessResult.data
+    } catch {
+      toast.error('We could not verify your citizen account. Please try again.')
+      return
+    }
+    const access = accessData as { ok?: boolean; role?: string | null } | null
+    if (!access?.ok || access.role !== 'citizen') {
+      toast.error('Sign in with your citizen account before retrying. App and dashboard tabs in this browser share one sign-in.')
+      return
+    }
+
+    setRetryingPhotoUpload(true)
+    try {
+      const attached = await uploadAndAttachPhoto(result.complaint_id, photoFile)
+      setPhotoUploadFailed(!attached)
+      if (attached) toast.success('Photo attached to your report.')
+      else toast.error('Photo upload failed. Keep your tracking number and try again.')
+    } finally {
+      setRetryingPhotoUpload(false)
+    }
   }
 
   async function copyTracking() {
@@ -887,6 +944,23 @@ export default function Report() {
             <p className="mt-2 text-muted-foreground">
               Your report goes to {result.institution_name}. Keep this tracking number:
             </p>
+            {photoFile && photoUploadFailed && (
+              <div role="alert" className="mt-5 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-left">
+                <p className="text-sm font-medium text-destructive">
+                  Your report was filed, but its photo could not be attached. The dashboard has no photo to show yet.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-3"
+                  disabled={retryingPhotoUpload}
+                  onClick={() => void retryPhotoAttachment()}
+                >
+                  {retryingPhotoUpload ? <Loader2 className="animate-spin" /> : null}
+                  {retryingPhotoUpload ? 'Retrying photo upload…' : 'Retry photo upload'}
+                </Button>
+              </div>
+            )}
             <div className="mt-6 rounded-xl bg-gold-tint p-4">
               <p className="font-display text-2xl font-bold leading-tight tracking-wide text-gold-deep tabular sm:text-[28px]">
                 {result.tracking_no}

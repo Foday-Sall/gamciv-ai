@@ -4,9 +4,12 @@ const productionBaseURL = process.env.BASE_URL;
 const landingURL = productionBaseURL
   ? new URL("/", productionBaseURL).toString()
   : "http://127.0.0.1:4174/";
-const dashboardURL = productionBaseURL
-  ? new URL("/dashboard/", productionBaseURL).toString()
-  : "http://127.0.0.1:4175/dashboard/";
+const sharedLoginURL = productionBaseURL
+  ? new URL("/app/login", productionBaseURL).toString()
+  : "http://127.0.0.1:4173/app/login";
+const dashboardLoginURL = productionBaseURL
+  ? new URL("/dash/login", productionBaseURL).toString()
+  : "http://127.0.0.1:4175/dash/login";
 
 async function expectPageAndAssetsToRender(
   page: Page,
@@ -54,9 +57,18 @@ for (const viewport of [
       );
     });
 
-    test("dashboard login renders with its assets", async ({ page }) => {
-      await expectPageAndAssetsToRender(page, dashboardURL, "GamCiv Dashboard");
-      await expect(page.locator("#otp-email")).toBeVisible();
+    test("shared citizen and staff sign-in renders with its assets", async ({ page }) => {
+      await expectPageAndAssetsToRender(page, sharedLoginURL, "Welcome back");
+      await expect(page.locator("#email")).toBeVisible();
+      await expect(page.locator("#password")).toBeVisible();
     });
   });
 }
+
+test("dashboard login route redirects to the shared sign-in page", async ({ page }) => {
+  await page.goto(dashboardLoginURL);
+  await expect(page).toHaveURL(/\/app\/login\/?$/);
+  if (productionBaseURL) {
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  }
+});

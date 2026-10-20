@@ -2,8 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 const productionBaseURL = process.env.BASE_URL;
 const dashboardBaseURL = productionBaseURL
-  ? new URL("/dashboard/", productionBaseURL).toString()
-  : "http://127.0.0.1:4175/dashboard/";
+  ? new URL("/dash/", productionBaseURL).toString()
+  : "http://127.0.0.1:4175/dash/";
 const dashboardOrigin = new URL(dashboardBaseURL).origin;
 const institutionId = "00000000-0000-4000-8000-000000000111";
 const officerId = "00000000-0000-4000-8000-000000000222";
@@ -56,6 +56,19 @@ async function installOfficerMocks(page: Page, failDashboardData = false) {
 
     if (method === "OPTIONS") {
       await route.fulfill({ status: 204, headers: corsHeaders });
+      return;
+    }
+
+    if (url.pathname.endsWith("/rpc/fn_dashboard_access")) {
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders, "content-type": "application/json" },
+        body: JSON.stringify({
+          ok: true,
+          role: "officer",
+          institution: { id: institutionId, code: "NAWEC", name: "NAWEC", logo_url: null },
+        }),
+      });
       return;
     }
 
@@ -120,6 +133,15 @@ async function installOfficerMocks(page: Page, failDashboardData = false) {
       return;
     }
 
+    if (url.pathname.endsWith("/rpc/fn_institution_map_complaints")) {
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders, "content-type": "application/json" },
+        body: JSON.stringify({ ok: true, complaints: [], total: 0, scope: "institution" }),
+      });
+      return;
+    }
+
     await route.fulfill({
       status: 404,
       headers: { ...corsHeaders, "content-type": "application/json" },
@@ -165,27 +187,22 @@ async function installOfficerMocks(page: Page, failDashboardData = false) {
 }
 
 test("signed-out visitors cannot open the institution dashboard", async ({ page }) => {
-  await page.goto(new URL("/dashboard/institute", dashboardOrigin).toString());
-  await expect(page).toHaveURL(/\/dashboard\/login\/?$/);
-  await expect(page.getByRole("heading", { name: "GamCiv Dashboard" })).toBeVisible();
+  await page.goto(new URL("/dash/", dashboardOrigin).toString());
+  await expect(page).toHaveURL(/\/app\/login\/?$/);
+  if (productionBaseURL) {
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  }
 });
 
 test("officers see only their institution and are redirected away from admin secrets", async ({ page }) => {
   const mocks = await installOfficerMocks(page);
-  await page.goto(new URL("/dashboard/settings", dashboardOrigin).toString());
+  await page.goto(new URL("/dash/settings", dashboardOrigin).toString());
 
-  await expect(page).toHaveURL(/\/dashboard\/institute\/?$/);
-  await expect(page.getByRole("heading", { name: "Complaint overview" })).toBeVisible();
+  await expect(page).toHaveURL(/\/dash\/?$/);
+  await expect(page.getByRole("heading", { name: "NAWEC operations" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Officer navigation" })).toBeVisible();
-  await expect(page.getByText("Complaint trend", { exact: true })).toBeVisible();
-  await expect(page.getByText("Case status", { exact: true })).toBeVisible();
-  await expect(page.getByText("Complaints by category", { exact: true })).toBeVisible();
-  await expect(page.getByText("Intake channels", { exact: true })).toBeVisible();
-  await expect(page.locator(".recharts-sector")).toHaveCount(4);
-  await expect.poll(() => page.locator(".recharts-sector").evaluateAll((paths) =>
-    paths.filter((path) => (path as SVGPathElement).getBBox().width > 0).length,
-  )).toBe(4);
-  await expect(page.getByText("Low water pressure", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Complaint queue" })).toBeVisible();
+  await expect(page.locator("#complaints").getByText("Low water pressure", { exact: true })).toBeVisible();
   await expect(page.getByText("API keys and secrets", { exact: true })).toHaveCount(0);
   await expect(page.getByText("TELEGRAM_BOT_TOKEN", { exact: true })).toHaveCount(0);
   expect(mocks.complaintQueryWasInstitutionScoped()).toBe(true);
@@ -202,9 +219,9 @@ test("officers see only their institution and are redirected away from admin sec
   }
   await sidebar.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect(sidebar.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
-  await sidebar.getByRole("navigation", { name: "Officer navigation" }).getByRole("button", { name: "Complaints" }).click();
-  await expect(page.getByRole("heading", { name: "Recent complaints" })).toBeInViewport();
-  await expect(sidebar.getByRole("navigation").getByRole("button", { name: "Complaints" })).toHaveAttribute("aria-current", "location");
+  await sidebar.getByRole("navigation", { name: "Officer navigation" }).getByRole("button", { name: "Complaint queue" }).click();
+  await expect(page.getByRole("heading", { name: "Complaint queue" })).toBeInViewport();
+  await expect(sidebar.getByRole("navigation").getByRole("button", { name: "Complaint queue" })).toHaveAttribute("aria-current", "location");
   if (process.env.GAMCIV_DASHBOARD_SCREENSHOT === "1") {
     await page.screenshot({ path: "/tmp/gamciv-institution-dashboard.png", fullPage: true });
   }
@@ -215,9 +232,9 @@ test("a lost connection produces a clear retry message instead of an unhandled e
   await installOfficerMocks(page, true);
   const runtimeErrors: string[] = [];
   page.on("pageerror", (error) => runtimeErrors.push(error.message));
-  await page.goto(new URL("/dashboard/institute", dashboardOrigin).toString());
+  await page.goto(new URL("/dash/", dashboardOrigin).toString());
 
-  const connectionAlert = page.getByRole("alert");
+  const connectionAlert = page.getByRole("alert").filter({ hasText: /connection/i });
   await expect(connectionAlert).toContainText(/connection/i, { timeout: 12_000 });
   await expect(connectionAlert.getByRole("button", { name: "Retry" })).toBeVisible();
   expect(runtimeErrors).toEqual([]);
@@ -226,9 +243,9 @@ test("a lost connection produces a clear retry message instead of an unhandled e
 test("the institution dashboard remains usable at a mobile width", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await installOfficerMocks(page);
-  await page.goto(new URL("/dashboard/institute", dashboardOrigin).toString());
+  await page.goto(new URL("/dash/", dashboardOrigin).toString());
 
-  await expect(page.getByRole("heading", { name: "Complaint overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "NAWEC operations" })).toBeVisible();
   const menuButton = page.getByRole("button", { name: "Open navigation" });
   await expect(menuButton).toBeVisible();
   await menuButton.click();
@@ -243,12 +260,11 @@ test("the institution dashboard remains usable at a mobile width", async ({ page
   await menuButton.click();
   await expect(drawer).toBeVisible();
   const mobileNav = drawer.getByRole("navigation", { name: "Officer navigation" });
-  await expect(mobileNav.getByRole("button", { name: "Overview" })).toBeVisible();
-  await mobileNav.getByRole("button", { name: "Analytics" }).click();
+  await expect(mobileNav.getByRole("button", { name: "Dashboard" })).toBeVisible();
+  await mobileNav.getByRole("button", { name: "Service trends" }).click();
   await expect(drawer).toHaveCount(0);
-  await expect(page.getByText("Complaint trend", { exact: true })).toBeInViewport();
-  await expect(page.getByText("Complaint trend", { exact: true })).toBeVisible();
-  await expect(page.getByText("Recent complaints", { exact: true })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Complaint trend for the last 14 days" })).toBeInViewport();
+  await expect(page.getByRole("heading", { name: "Complaint queue" })).toBeVisible();
   const timeRange = page.getByRole("group", { name: "Trend time range" });
   await expect(timeRange.getByRole("button", { name: "7 days" })).toBeVisible();
   await timeRange.getByRole("button", { name: "7 days" }).click();
