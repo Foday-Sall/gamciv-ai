@@ -32,7 +32,7 @@ export default function WebAppScreen({ static: isStatic }: PhoneScreenProps) {
         <p className="text-[7px] text-neutral-500">Enter a reference number</p>
         <div className="mt-1.5 flex items-center gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1">
           <Search className="h-2 w-2 text-neutral-400" />
-          <span className="text-[8px] font-medium text-neutral-800">GC-2418</span>
+          <span className="text-[8px] font-medium text-neutral-800">GMC-2026-02418</span>
           {!skip && <span className="ml-auto inline-block h-1.5 w-8 animate-pulse rounded-full bg-neutral-300" />}
         </div>
         <motion.div

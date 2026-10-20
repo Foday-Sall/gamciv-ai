@@ -68,6 +68,9 @@ export default function Institutions() {
             ))}
           </div>
         </Reveal>
+        <p className="mt-6 text-xs text-muted-foreground/70">
+          Prototype built for the ITCA hackathon. Not affiliated with or endorsed by these institutions.
+        </p>
       </div>
     </section>
   )

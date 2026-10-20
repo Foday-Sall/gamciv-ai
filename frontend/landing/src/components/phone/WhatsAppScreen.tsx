@@ -6,7 +6,7 @@ const WA_SCRIPT = [
   { from: "user" as const, text: "The drain on Kairaba Avenue is blocked. It floods every rain.", time: "09:41" },
   {
     from: "agent" as const,
-    text: "Noted: KMC drainage issue. Reference GC-2418. Forwarded to their works department.",
+    text: "Noted: KMC drainage issue. Reference GMC-2026-02418. Forwarded to their works department.",
     time: "09:41",
   },
   {
@@ -14,7 +14,7 @@ const WA_SCRIPT = [
     text: "A crew is scheduled this week. I will message you when it is done.",
     time: "09:42",
   },
-  { from: "user" as const, text: "Any update on GC-2418?", time: "10:03" },
+  { from: "user" as const, text: "Any update on GMC-2026-02418?", time: "10:03" },
 ]
 
 /** Screen 1: WhatsApp chat. */
@@ -81,7 +81,7 @@ export default function WhatsAppScreen({ static: isStatic }: PhoneScreenProps) {
           >
             <div className="rounded-lg rounded-bl-sm bg-white px-2 py-1.5 shadow-sm">
               <p className="text-[8.5px] leading-snug text-neutral-800">
-                Cleared today. GC-2418 is closed.
+                Cleared today. GMC-2026-02418 is closed.
               </p>
               <div className="mt-1 flex items-center justify-between gap-1">
                 <span className="rounded-full bg-[#DCFCE7] px-1.5 py-px text-[6.5px] font-semibold text-[#15803D]">

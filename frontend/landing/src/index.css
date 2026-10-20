@@ -2,10 +2,10 @@
 
 :root {
   /* "Sunrise over the river", a warm civic palette.
-     Sand/bone paper, espresso ink, deep river green as the institutional
+     White paper, espresso ink, deep river green as the institutional
      primary, gold for action highlights. Blue lives only in the flag and in
      the third-party screens inside the phone (WhatsApp/SMS/Telegram). */
-  --background: #f9f4e8; /* Sand paper */
+  --background: #ffffff; /* White paper */
   --foreground: #2a1b10; /* Espresso ink */
   --card: #ffffff;
   --card-foreground: #2a1b10;

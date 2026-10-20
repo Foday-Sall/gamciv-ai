@@ -5,18 +5,18 @@ import { EASE, SCREEN_VARIANTS, SCREEN_TRANSITION, type PhoneScreenProps } from 
 const SMS_SCRIPT = [
   {
     out: false,
-    text: "GAMCIV: Report GC-2418 received. Routed to KMC Works. Reply STATUS for updates.",
+    text: "GAMCIV: Report GMC-2026-02418 received. Routed to KMC Works. Reply STATUS for updates.",
     time: "09:41",
   },
-  { out: true, text: "STATUS GC-2418", time: "10:03" },
+  { out: true, text: "STATUS GMC-2026-02418", time: "10:03" },
   {
     out: false,
-    text: "GC-2418: Crew scheduled this week. We will text you when the drain is cleared.",
+    text: "GMC-2026-02418: Crew scheduled this week. We will text you when the drain is cleared.",
     time: "10:15",
   },
   {
     out: false,
-    text: "GC-2418 CLOSED: Drain cleared today. Reply any time to report a new issue.",
+    text: "GMC-2026-02418 CLOSED: Drain cleared today. Reply any time to report a new issue.",
     time: "16:40",
   },
 ]

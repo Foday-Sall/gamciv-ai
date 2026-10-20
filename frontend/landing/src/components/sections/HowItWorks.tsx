@@ -17,7 +17,7 @@ const trackerSteps = [
     icon: "check" as const,
     title: "Report received",
     time: "08:14",
-    detail: "Drainage issue logged from WhatsApp",
+    detail: "Electricity fault logged from WhatsApp",
   },
   {
     icon: "check" as const,
@@ -49,16 +49,16 @@ const chatScript: ChatMessage[] = [
   { from: "user", text: "The drain on Kairaba Avenue is blocked. It floods whenever it rains." },
   {
     from: "agent",
-    text: "Noted. This is a KMC drainage issue. Reference GC-2418. We have forwarded it to their works department.",
+    text: "Noted. This is a KMC drainage issue. Reference GMC-2026-02418. We have forwarded it to their works department.",
     meta: "Routed just now",
   },
-  { from: "user", text: "Any update on GC-2418?" },
+  { from: "user", text: "Any update on GMC-2026-02418?" },
   {
     from: "agent",
     text: "KMC says a crew is scheduled this week. I will message you when it is done.",
     meta: "Status: in progress",
   },
-  { from: "agent", text: "Cleared today. GC-2418 is closed.", meta: "Resolved" },
+  { from: "agent", text: "Cleared today. GMC-2026-02418 is closed.", meta: "Resolved" },
 ]
 
 const steps = [

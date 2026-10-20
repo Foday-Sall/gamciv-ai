@@ -9,7 +9,7 @@ const TG_NOTIFS = [
     bg: "rgba(34,158,217,0.14)",
     title: "GamCiv Bot",
     time: "09:41",
-    body: "Report GC-2418 received: routed to KMC. Send the reference any time to track it.",
+    body: "Report GMC-2026-02418 received: routed to KMC. Send the reference any time to track it.",
   },
   {
     icon: Bell,

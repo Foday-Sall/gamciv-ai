@@ -19,7 +19,7 @@ export default function Hero({ reduce }: { reduce: boolean | null }) {
         >
           <motion.p variants={fadeUp(16)} className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             <GambiaFlag className="h-3.5 w-auto rounded-[1px]" />
-            Republic of The Gambia
+            Built for The Gambia
           </motion.p>
           <div className="mt-5">
             <AnimatedHeadline />
