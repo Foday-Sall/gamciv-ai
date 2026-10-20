@@ -176,7 +176,7 @@ test("officers see only their institution and are redirected away from admin sec
 
   await expect(page).toHaveURL(/\/dashboard\/institute\/?$/);
   await expect(page.getByRole("heading", { name: "Complaint overview" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Dashboard sections" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Officer navigation" })).toBeVisible();
   await expect(page.getByText("Complaint trend", { exact: true })).toBeVisible();
   await expect(page.getByText("Case status", { exact: true })).toBeVisible();
   await expect(page.getByText("Complaints by category", { exact: true })).toBeVisible();
@@ -195,8 +195,16 @@ test("officers see only their institution and are redirected away from admin sec
   await expect(page.getByRole("group", { name: "Complaint trend for the last 7 days" })).toBeVisible();
   await page.getByRole("button", { name: "Hide resolved reports" }).click();
   await expect(page.getByRole("button", { name: "Show resolved reports" })).toHaveAttribute("aria-pressed", "false");
-  await page.getByRole("navigation", { name: "Dashboard sections" }).getByRole("button", { name: /Complaints/ }).click();
+  const sidebar = page.getByRole("complementary", { name: "Officer workspace sidebar" });
+  await expect(sidebar).toBeVisible();
+  if (process.env.GAMCIV_DASHBOARD_SCREENSHOT === "1") {
+    await page.screenshot({ path: "/tmp/gamciv-officer-sidebar-expanded.png" });
+  }
+  await sidebar.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(sidebar.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  await sidebar.getByRole("navigation", { name: "Officer navigation" }).getByRole("button", { name: "Complaints" }).click();
   await expect(page.getByRole("heading", { name: "Recent complaints" })).toBeInViewport();
+  await expect(sidebar.getByRole("navigation").getByRole("button", { name: "Complaints" })).toHaveAttribute("aria-current", "location");
   if (process.env.GAMCIV_DASHBOARD_SCREENSHOT === "1") {
     await page.screenshot({ path: "/tmp/gamciv-institution-dashboard.png", fullPage: true });
   }
@@ -221,7 +229,24 @@ test("the institution dashboard remains usable at a mobile width", async ({ page
   await page.goto(new URL("/dashboard/institute", dashboardOrigin).toString());
 
   await expect(page.getByRole("heading", { name: "Complaint overview" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Dashboard sections" })).toBeVisible();
+  const menuButton = page.getByRole("button", { name: "Open navigation" });
+  await expect(menuButton).toBeVisible();
+  await menuButton.click();
+  const drawer = page.getByRole("dialog", { name: "Officer navigation" });
+  await expect(drawer).toBeVisible();
+  if (process.env.GAMCIV_DASHBOARD_SCREENSHOT === "1") {
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: "/tmp/gamciv-officer-drawer-mobile.png" });
+  }
+  await page.keyboard.press("Escape");
+  await expect(drawer).toHaveCount(0);
+  await menuButton.click();
+  await expect(drawer).toBeVisible();
+  const mobileNav = drawer.getByRole("navigation", { name: "Officer navigation" });
+  await expect(mobileNav.getByRole("button", { name: "Overview" })).toBeVisible();
+  await mobileNav.getByRole("button", { name: "Analytics" }).click();
+  await expect(drawer).toHaveCount(0);
+  await expect(page.getByText("Complaint trend", { exact: true })).toBeInViewport();
   await expect(page.getByText("Complaint trend", { exact: true })).toBeVisible();
   await expect(page.getByText("Recent complaints", { exact: true })).toBeVisible();
   const timeRange = page.getByRole("group", { name: "Trend time range" });

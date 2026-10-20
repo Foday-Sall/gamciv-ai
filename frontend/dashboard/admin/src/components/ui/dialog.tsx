@@ -17,6 +17,7 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
         "fixed inset-0 z-50 bg-black/70 backdrop-blur-sm",
         "data-[state=open]:animate-in data-[state=open]:fade-in-0",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
+        "motion-reduce:animate-none",
         className
       )}
       {...props}
@@ -24,19 +25,27 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
   )
 }
 
-function DialogContent({ className, children, ...props }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+function DialogContent({
+  className,
+  children,
+  side = "center",
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Content> & { side?: "center" | "left" }) {
+  const placement = side === "left"
+    ? "fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-[min(84vw,320px)] max-w-none flex-col gap-0 border-y-0 border-l-0 border-r border-border bg-card p-0 shadow-xl"
+    : "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-card p-6 shadow-2xl max-h-[85vh] overflow-y-auto slim-scroll"
+  const animation = side === "left"
+    ? "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-left data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-left"
+    : "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4",
-          "rounded-xl border border-border bg-card p-6 shadow-2xl",
-          "max-h-[85vh] overflow-y-auto slim-scroll",
-          "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-bottom-4",
-          "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
-          "duration-200",
+          placement,
+          animation,
+          "duration-200 motion-reduce:animate-none",
           className
         )}
         {...props}

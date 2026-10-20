@@ -6,9 +6,7 @@ import {
   Clock3,
   FolderOpen,
   Inbox,
-  Loader2,
   LogOut,
-  MessageSquareText,
   RefreshCw,
   Search,
   TrendingUp,
@@ -39,6 +37,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
+import { OfficerShell } from "@/components/OfficerShell"
 import {
   Table,
   TableBody,
@@ -195,7 +194,7 @@ export default function InstitutionDashboard() {
   const [trendRange, setTrendRange] = useState<7 | 14>(14)
   const [showReceived, setShowReceived] = useState(true)
   const [showResolved, setShowResolved] = useState(true)
-  const [activeSection, setActiveSection] = useState("overview")
+  const [activeSection, setActiveSection] = useState<"overview" | "analytics" | "complaints">("overview")
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
 
   useEffect(() => {
@@ -219,7 +218,10 @@ export default function InstitutionDashboard() {
       const visible = entries
         .filter((entry) => entry.isIntersecting)
         .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
-      if (visible) setActiveSection(visible.target.id)
+      const sectionId = visible?.target.id
+      if (sectionId === "overview" || sectionId === "analytics" || sectionId === "complaints") {
+        setActiveSection(sectionId)
+      }
     }, { rootMargin: "-140px 0px -55% 0px", threshold: [0, 0.15, 0.4] })
     sections.forEach((section) => observer.observe(section))
     return () => observer.disconnect()
@@ -458,7 +460,7 @@ export default function InstitutionDashboard() {
     window.location.href = "/dashboard/login"
   }
 
-  function goToSection(section: string) {
+  function goToSection(section: "overview" | "analytics" | "complaints") {
     document.getElementById(section)?.scrollIntoView({
       behavior: prefersReducedMotion ? "auto" : "smooth",
       block: "start",
@@ -542,12 +544,18 @@ export default function InstitutionDashboard() {
   ]
 
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 py-7 md:px-6 md:py-9">
+    <OfficerShell
+      institutionName={institution?.name ?? "Your institution"}
+      activeSection={activeSection}
+      onNavigate={goToSection}
+      onRefresh={() => institution && void loadDashboard(institution.id)}
+      onSignOut={() => void signOut()}
+      refreshing={dataLoading}
+    >
       <header className="mb-5 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">Institution workspace</Badge>
-            {institution?.name && <span className="text-sm text-muted-foreground">{institution.name}</span>}
           </div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             Complaint overview
@@ -556,48 +564,7 @@ export default function InstitutionDashboard() {
             Reports, response trends, and workload assigned to {institution?.name ?? "your institution"}.
           </p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            <Button
-              variant="outline"
-              onClick={() => institution && void loadDashboard(institution.id)}
-              disabled={dataLoading || !institution}
-            >
-              {dataLoading
-                ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                : <RefreshCw className="mr-2 h-4 w-4" />}
-              Refresh data
-            </Button>
-            <Button variant="ghost" onClick={() => void signOut()}>
-              <LogOut className="mr-2 h-4 w-4" /> Sign out
-            </Button>
-        </div>
       </header>
-
-      <nav aria-label="Dashboard sections" className="-mx-4 mb-5 border-b border-border bg-background px-4 md:-mx-6 md:px-6">
-        <div className="flex min-h-12 items-center gap-1 overflow-x-auto" role="group">
-          {[
-            { id: "overview", label: "Overview", icon: Inbox },
-            { id: "analytics", label: "Analytics", icon: TrendingUp },
-            { id: "complaints", label: "Complaints", icon: MessageSquareText, count: stats?.open },
-          ].map(({ id, label, icon: Icon, count }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => goToSection(id)}
-              aria-current={activeSection === id ? "location" : undefined}
-              className={`inline-flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                activeSection === id
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              {label}
-              {count !== undefined && <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums">{count}</span>}
-            </button>
-          ))}
-        </div>
-      </nav>
 
       {statsError && (
         <Card className="mb-5 border-warn/30 bg-warn/5" role="status">
@@ -885,6 +852,6 @@ export default function InstitutionDashboard() {
         Complaint records and analytics are limited to {institution?.name ?? "your institution"}.
       </p>
       </section>
-    </main>
+    </OfficerShell>
   )
 }
