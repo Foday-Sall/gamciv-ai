@@ -31,6 +31,7 @@ import {
   FetchResendClient,
   emailHtml,
   logSystemEmail,
+  type LogEmailDeps,
   type ResendClient,
 } from "../_shared/resend.ts";
 
@@ -48,7 +49,7 @@ interface HookPayload {
 export interface EmailHookDeps {
   secret: string;
   resend: ResendClient | null;
-  logDeps: { postgrestUrl: string; serviceRoleKey: string };
+  logDeps: LogEmailDeps;
   fetchImpl: typeof fetch;
   /** Default From header for every email this hook sends. */
   from: string;
