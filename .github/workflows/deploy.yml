@@ -50,11 +50,13 @@ jobs:
           set -e
           export SSH="ssh -i /tmp/deploy_key $VPS_HOST"
           export SCP="scp -i /tmp/deploy_key"
-          # frontends: copy built dist folders to nginx roots
+          # frontends: the nginx image bakes HTML at /usr/share/nginx/html — copy into
+          # the running container and reload (the /opt/* staging dirs are scratch)
           $SSH "mkdir -p /opt/gamciv-app/html /opt/gamciv-dashboard/html /opt/gamciv-landing/html"
           $SCP -r frontend/app/dist/. "$VPS_HOST:/opt/gamciv-app/html/"
           $SCP -r frontend/dashboard/admin/dist/. "$VPS_HOST:/opt/gamciv-dashboard/html/"
           $SCP -r frontend/landing/dist/. "$VPS_HOST:/opt/gamciv-landing/html/"
+          $SSH "docker cp /opt/gamciv-app/html/. gamciv-landing:/usr/share/nginx/html/app/ && docker cp /opt/gamciv-dashboard/html/. gamciv-landing:/usr/share/nginx/html/dashboard/ && docker cp /opt/gamciv-landing/html/. gamciv-landing:/usr/share/nginx/html/ && docker exec gamciv-landing nginx -s reload"
           # backend functions: rsync to the supabase functions volume and restart
           $SSH "mkdir -p /opt/supabase/docker/volumes/functions"
           $SCP -r backend/functions/. "$VPS_HOST:/opt/supabase/docker/volumes/functions/"
