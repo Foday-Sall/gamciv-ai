@@ -4,15 +4,28 @@ import { Toaster } from "@/components/ui/toast"
 import { Sidebar } from "@/components/Sidebar"
 import { Topbar } from "@/components/Topbar"
 import { cn } from "@/lib/utils"
-import { supabase } from "@/lib/secretsClient"
+import { resolveSessionRole } from "@/lib/authGate"
 import { Loader2 } from "lucide-react"
 
 /**
- * Route guard: only profiles with role = "admin" may use the console.
- * Server-side every admin RPC re-checks fn_is_admin(), so this gate only
- * prevents non-admins from staring at a wall of failing requests.
+ * Route guard for the administrator console.
+ *
+ *   role = admin   -> console (Outlet)
+ *   role = officer -> the institution dashboard at officerPath
+ *   no session     -> the dashboard login at loginPath
+ *
+ * Server-side every admin RPC re-checks fn_is_admin(), and the officer's
+ * data read is RLS-scoped by comp_select_officer_own_inst, so this gate only
+ * prevents non-admins from staring at a wall of failing requests — it is not
+ * the security control itself.
  */
-export function AdminLayout() {
+export function AdminLayout({
+  officerPath = "/institute",
+  loginPath = "/login",
+}: {
+  officerPath?: string
+  loginPath?: string
+}) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [search, setSearch] = useState("")
@@ -23,21 +36,20 @@ export function AdminLayout() {
     let cancelled = false
 
     async function gate() {
-      const { data } = await supabase.auth.getSession()
-      const user = data.session?.user
-      if (!user) {
-        window.location.href = "/app/login"
+      const info = await resolveSessionRole()
+      if (cancelled) return
+      if (!info.session) {
+        // Not signed in: the login screen is all they get.
+        window.location.href = loginPath
         return
       }
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("user_id", user.id)
-        .single()
-      if (cancelled) return
-      if (profile?.role !== "admin") {
-        // Not an admin: back to the citizen/staff app.
-        window.location.href = "/app/home"
+      if (info.role === "officer") {
+        window.location.href = officerPath
+        return
+      }
+      if (info.role !== "admin") {
+        // Signed in but not staff (citizen or unknown): citizen app.
+        window.location.href = "/app/login"
         return
       }
       setChecked(true)
@@ -47,7 +59,7 @@ export function AdminLayout() {
     return () => {
       cancelled = true
     }
-  }, [navigate])
+  }, [navigate, officerPath, loginPath])
 
   if (!checked) {
     return (

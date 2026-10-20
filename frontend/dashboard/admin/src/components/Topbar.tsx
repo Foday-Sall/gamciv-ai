@@ -30,7 +30,7 @@ export function Topbar({
       await supabase.auth.signOut()
     } finally {
       // Session is gone (or the call failed) — leave the console regardless.
-      window.location.href = "/app/login"
+      window.location.href = "/login"
     }
   }
 
