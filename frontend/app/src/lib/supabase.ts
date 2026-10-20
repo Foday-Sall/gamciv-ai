@@ -40,13 +40,15 @@ export type Profile = {
   email: string | null
   role: 'citizen' | 'officer' | 'admin'
   full_name: string | null
+  phone_verified: boolean
+  email_verified: boolean
 }
 
 /** Fetch the auth user's profile row; null when it doesn't exist yet. */
 export async function getProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('user_id, email, role, full_name')
+    .select('user_id, email, role, full_name, phone_verified, email_verified')
     .eq('user_id', userId)
     .maybeSingle()
   if (error) return null

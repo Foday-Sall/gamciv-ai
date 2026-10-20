@@ -65,14 +65,50 @@ function initials(name: string | null): string {
 export default function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { session } = useSession()
+  const { session, loading: sessionLoading } = useSession()
   const name = useDisplayName(session)
   const [scrolled, setScrolled] = useState(false)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const [gateResult, setGateResult] = useState<{
+    userId: string | null
+    status: 'ready' | 'needs-phone' | 'unavailable'
+  }>({ userId: null, status: 'ready' })
+  const [gateRetry, setGateRetry] = useState(0)
 
   const isFocusMode = location.pathname === '/report'
   const email = session?.user?.email ?? null
+  const phoneGate = sessionLoading
+    ? 'checking'
+    : session?.user?.id
+      ? gateResult.userId === session.user.id ? gateResult.status : 'checking'
+      : 'ready'
+
+  // A persistent auth session is not proof that a citizen completed phone OTP.
+  // Check the server profile on every shell entry, including a browser refresh.
+  useEffect(() => {
+    if (sessionLoading || !session?.user?.id) return
+    let cancelled = false
+    const userId = session.user.id
+    getProfile(session.user.id).then((profile) => {
+      if (cancelled) return
+      if (!profile) {
+        setGateResult({ userId, status: 'unavailable' })
+        return
+      }
+      if (profile.role === 'citizen' && profile.phone_verified !== true) {
+        setGateResult({ userId, status: 'needs-phone' })
+        navigate('/verify/phone', { replace: true })
+        return
+      }
+      setGateResult({ userId, status: 'ready' })
+    }).catch(() => {
+      if (!cancelled) setGateResult({ userId, status: 'unavailable' })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [session?.user?.id, sessionLoading, gateRetry, navigate])
 
   // A signed-in staff member (officer/admin) browsing the citizen app should
   // be sent to the dashboard: officers to their institution's dashboard,
@@ -99,6 +135,30 @@ export default function AppShell() {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  if (phoneGate !== 'ready') {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background px-5">
+        <section className="w-full max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
+          {phoneGate === 'unavailable' ? (
+            <>
+              <h1 className="font-display text-xl font-bold">We could not check your account</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Check your internet connection and try again. Your verification status has not changed.
+              </p>
+              <Button className="mt-5 w-full" onClick={() => setGateRetry((count) => count + 1)}>
+                Try again
+              </Button>
+            </>
+          ) : (
+            <p role="status" className="text-sm text-muted-foreground">
+              Checking your account and verification status…
+            </p>
+          )}
+        </section>
+      </main>
+    )
+  }
 
   async function signOut() {
     setSigningOut(true)

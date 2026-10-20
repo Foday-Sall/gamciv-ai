@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { supabase } from '@/lib/supabase'
+import { getProfile, supabase } from '@/lib/supabase'
 
 const OTP_LENGTH = 6
 
@@ -42,6 +42,9 @@ const FULL_NUMBER_HINT =
   'Please enter your full phone number with country code, e.g. 220XXXXXXX'
 const RATE_LIMIT_HINT = 'Too many codes requested. Please wait before trying again.'
 const NETWORK_HINT = 'Connection problem. Check your internet and try again.'
+const TIMEOUT_HINT = 'This is taking longer than expected. Check your connection and try again.'
+const SERVER_HINT = 'Phone verification is temporarily unavailable. Please try again shortly.'
+const REQUEST_TIMEOUT_MS = 15000
 
 /**
  * Turn a failed send-phone-otp response into an honest message: the real
@@ -67,6 +70,8 @@ function classifySendError(status: number, message: string | undefined): string 
   if (status === 409 || m.includes('already verified') || m.includes('already in use')) {
     return 'This number is already in use by another account. Sign in with that account or use a different number.'
   }
+  if (status === 401) return 'Your session has expired. Sign in again and retry phone verification.'
+  if (status >= 500) return SERVER_HINT
   // Anything else: show the server's actual message.
   return message && message.trim().length > 0 ? message : 'Could not send the code. Try again.'
 }
@@ -79,10 +84,38 @@ export default function VerifyPhone() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [resendIn, setResendIn] = useState(0)
+  const [checkingAccount, setCheckingAccount] = useState(true)
 
   useEffect(() => {
     document.title = 'Verify phone · GamCiv'
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const { data } = await supabase.auth.getSession()
+      if (!data.session) {
+        navigate('/login', { replace: true })
+        return
+      }
+      const profile = await getProfile(data.session.user.id)
+      if (cancelled) return
+      if (profile?.phone_verified) {
+        navigate('/home', { replace: true })
+      } else if (!profile) {
+        setError('We could not check your account. Check your connection and try again.')
+      }
+      setCheckingAccount(false)
+    })().catch(() => {
+      if (!cancelled) {
+        setError(NETWORK_HINT)
+        setCheckingAccount(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [navigate])
 
   // 60s resend cooldown once a code has been sent.
   useEffect(() => {
@@ -113,13 +146,22 @@ export default function VerifyPhone() {
       setError(FULL_NUMBER_HINT)
       return
     }
+    if (!navigator.onLine) {
+      setError('You appear to be offline. Reconnect to the internet and try again.')
+      return
+    }
     const headers = await authHeaders()
     if (!headers) return
     setBusy(true)
     try {
       const res = await fetch(
         `${(import.meta.env.VITE_SUPABASE_URL as string).replace(/\/+$/, '')}/functions/v1/auth-verify/send-phone-otp`,
-        { method: 'POST', headers, body: JSON.stringify({ phone: normalized }) },
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ phone: normalized }),
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        },
       )
       const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string }
       if (!res.ok) {
@@ -128,9 +170,9 @@ export default function VerifyPhone() {
       }
       setStage('code')
       setResendIn(60)
-    } catch {
+    } catch (err) {
       // Only a true network failure (fetch itself threw) says "connection".
-      setError(NETWORK_HINT)
+      setError(err instanceof Error && err.name === 'TimeoutError' ? TIMEOUT_HINT : NETWORK_HINT)
     } finally {
       setBusy(false)
     }
@@ -143,6 +185,10 @@ export default function VerifyPhone() {
       setError(`Enter the ${OTP_LENGTH}-digit code sent to your WhatsApp.`)
       return
     }
+    if (!navigator.onLine) {
+      setError('You appear to be offline. Reconnect to the internet and try again.')
+      return
+    }
     const headers = await authHeaders()
     if (!headers) return
     setBusy(true)
@@ -153,9 +199,10 @@ export default function VerifyPhone() {
           method: 'POST',
           headers,
           body: JSON.stringify({ phone: normalizePhone(phone), code: token.trim() }),
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         },
       )
-      const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string }
+      const body = (await res.json().catch(() => ({}))) as { verified?: boolean; message?: string; error?: string }
       if (!res.ok) {
         const m = (body.error ?? body.message ?? '').toLowerCase()
         if (res.status === 429 || m.includes('too many')) setError(RATE_LIMIT_HINT)
@@ -163,13 +210,23 @@ export default function VerifyPhone() {
         else if (m.includes('expired')) setError('That code expired. Request a new one.')
         else if (m.includes('not correct') || m.includes('did not match')) {
           setError('That code is not correct. Check and try again.')
-        } else setError(body.error ?? body.message ?? 'That code did not match. Check and try again.')
+        } else if (res.status === 401) {
+          setError('Your session has expired. Sign in again and retry phone verification.')
+        } else if (res.status >= 500) {
+          setError(SERVER_HINT)
+        } else {
+          setError('We could not verify that code. Check it and try again.')
+        }
+        return
+      }
+      if (body.verified !== true) {
+        setError(SERVER_HINT)
         return
       }
       navigate('/home', { replace: true })
-    } catch {
+    } catch (err) {
       // Only a true network failure (fetch itself threw) says "connection".
-      setError(NETWORK_HINT)
+      setError(err instanceof Error && err.name === 'TimeoutError' ? TIMEOUT_HINT : NETWORK_HINT)
     } finally {
       setBusy(false)
     }
@@ -207,7 +264,7 @@ export default function VerifyPhone() {
                   {error}
                 </p>
               ) : null}
-              <Button type="submit" disabled={busy} className="w-full">
+              <Button type="submit" disabled={busy || checkingAccount} className="w-full">
                 {busy ? 'Sending…' : 'Send code on WhatsApp'}
               </Button>
             </form>
@@ -232,7 +289,7 @@ export default function VerifyPhone() {
                   {error}
                 </p>
               ) : null}
-              <Button type="submit" disabled={busy} className="w-full">
+              <Button type="submit" disabled={busy || checkingAccount} className="w-full">
                 {busy ? 'Verifying…' : 'Verify phone'}
               </Button>
               <button
