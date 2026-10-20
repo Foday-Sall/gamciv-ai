@@ -307,114 +307,119 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header>
-        <div className="mx-auto flex h-16 w-full max-w-md items-center px-5">
+        <div className="mx-auto flex h-20 w-full max-w-md items-center justify-center px-5">
           <a
             href="https://gamciv.pocketsoftware.dev/"
             className="flex items-center gap-2.5 text-lg font-bold tracking-tight font-display"
           >
-            <GamCivMark />
+            <GamCivMark className="h-9 w-9 rounded-xl shadow-sm" />
             GamCiv
           </a>
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-10">
-        <h1 className="font-display text-2xl font-bold tracking-tight">
-          {isSignup ? 'Create your GamCiv account' : 'Welcome back'}
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          {isSignup
-            ? 'Report public problems and follow them until they are fixed.'
-            : 'Sign in to follow the reports you have filed.'}
-        </p>
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-5 py-10">
+        <section className="w-full rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col items-center text-center">
+            <GamCivMark className="h-14 w-14 rounded-2xl shadow-sm" />
+            <h1 className="mt-5 font-display text-2xl font-bold tracking-tight">
+              {isSignup ? 'Create your GamCiv account' : 'Welcome back'}
+            </h1>
+            <p className="mt-2 max-w-sm text-muted-foreground">
+              {isSignup
+                ? 'Create a free account to report public problems and follow them until they are fixed.'
+                : 'Sign in to follow the reports you have filed.'}
+            </p>
+          </div>
 
-        <form onSubmit={submit} className="mt-8 space-y-5" noValidate={false}>
-          {isSignup && (
+          <form onSubmit={submit} className="mt-8 space-y-5" noValidate={false}>
+            {isSignup && (
+              <FieldWithIcon
+                id="fullname"
+                label="Full name"
+                type="text"
+                value={name}
+                onChange={setName}
+                autoComplete="name"
+                placeholder="e.g. Awa Njie"
+                icon={<UserIcon />}
+              />
+            )}
+
             <FieldWithIcon
-              id="fullname"
-              label="Full name"
-              type="text"
-              value={name}
-              onChange={setName}
-              autoComplete="name"
-              placeholder="e.g. Awa Njie"
-              icon={<UserIcon />}
+              id="email"
+              label="Email"
+              type="email"
+              value={email}
+              onChange={setEmail}
+              autoComplete="email"
+              placeholder="you@example.com"
+              icon={<MailIcon />}
             />
-          )}
 
-          <FieldWithIcon
-            id="email"
-            label="Email"
-            type="email"
-            value={email}
-            onChange={setEmail}
-            autoComplete="email"
-            placeholder="you@example.com"
-            icon={<MailIcon />}
-          />
+            <PasswordField
+              id="password"
+              label="Password"
+              value={password}
+              onChange={setPassword}
+              autoComplete={isSignup ? 'new-password' : 'current-password'}
+              describedBy="password-hint"
+            />
+            <p id="password-hint" className="text-xs text-muted-foreground">
+              At least 6 characters.
+            </p>
 
-          <PasswordField
-            id="password"
-            label="Password"
-            value={password}
-            onChange={setPassword}
-            autoComplete={isSignup ? 'new-password' : 'current-password'}
-            describedBy="password-hint"
-          />
-          <p id="password-hint" className="text-xs text-muted-foreground">
-            At least 6 characters.
-          </p>
+            {error && (
+              <div
+                role="alert"
+                className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+              >
+                {error}
+              </div>
+            )}
 
-          {error && (
-            <div
-              role="alert"
-              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
-            >
-              {error}
-            </div>
-          )}
+            <Button type="submit" className="h-11 w-full text-base" disabled={busy !== null}>
+              {formBusy ? <Loader2 className="animate-spin" /> : null}
+              {isSignup ? 'Sign up' : 'Sign in'}
+            </Button>
+          </form>
 
-          <Button type="submit" className="h-11 w-full text-base" disabled={busy !== null}>
-            {formBusy ? <Loader2 className="animate-spin" /> : null}
-            {isSignup ? 'Sign up' : 'Sign in'}
-          </Button>
-        </form>
+          <div className="my-6 flex items-center gap-3">
+            <Separator className="flex-1" />
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">or</span>
+            <Separator className="flex-1" />
+          </div>
 
-        <div className="my-6 flex items-center gap-3">
-          <Separator className="flex-1" />
-          <span className="text-xs uppercase tracking-wide text-muted-foreground">or</span>
-          <Separator className="flex-1" />
-        </div>
-
-        <Button
-          type="button"
-          variant="outline"
-          className="h-11 w-full text-base"
-          onClick={signInWithGoogle}
-          disabled={busy !== null}
-        >
-          {googleBusy ? (
-            <Loader2 className="animate-spin" />
-          ) : (
-            <GoogleLogo />
-          )}
-          Continue with Google
-        </Button>
-
-        <p className="mt-6 text-sm text-muted-foreground">
-          {isSignup ? 'Already have an account? ' : 'New to GamCiv? '}
-          <button
+          <Button
             type="button"
-            onClick={() => switchMode(isSignup ? 'signin' : 'signup')}
-            className="font-medium text-primary underline-offset-4 hover:underline"
+            variant="outline"
+            className="h-11 w-full text-base"
+            onClick={signInWithGoogle}
+            disabled={busy !== null}
           >
-            {isSignup ? 'Sign in' : 'Create an account'}
-          </button>
-        </p>
+            {googleBusy ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <GoogleLogo />
+            )}
+            Continue with Google
+          </Button>
+
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            {isSignup ? 'Already have an account? ' : 'New to GamCiv? '}
+            <button
+              type="button"
+              onClick={() => switchMode(isSignup ? 'signin' : 'signup')}
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {isSignup ? 'Sign in' : 'Create an account'}
+            </button>
+          </p>
+        </section>
       </main>
 
       <footer className="mx-auto w-full max-w-md px-5 pb-6">
-        <p className="text-center text-xs leading-relaxed text-muted-foreground">
+        <p className="rounded-lg border border-border/80 bg-card/60 px-4 py-3 text-center text-xs leading-relaxed text-muted-foreground">
           Free to use. Your reports are public data; your account details are not.
         </p>
       </footer>
