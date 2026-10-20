@@ -17,7 +17,7 @@
  * single-use consumption. Never modifies existing functions.
  */
 import { FetchGowaClient, type GowaClient } from "../_shared/gowaClient.ts";
-import { jsonResponse, errorResponse, readJson, timingSafeEqualStr } from "../_shared/http.ts";
+import { jsonResponse, errorResponse, readJson, timingSafeEqualStr, fetchWithRetry } from "../_shared/http.ts";
 import {
   generateOtp,
   hashOtp,
@@ -67,7 +67,7 @@ export function buildDeps(overrides: Partial<AuthVerifyDeps> = {}): AuthVerifyDe
         deviceId: Deno.env.get("GOWA_DEVICE_ID"),
       })
       : null,
-    fetchImpl: fetch,
+    fetchImpl: (url, init) => fetchWithRetry(fetch, url as string, init ?? {}),
     now: new Date(),
     ...overrides,
   };
@@ -90,6 +90,25 @@ export async function restSelect(
   });
   if (!res.ok) throw new Error(`PostgREST GET ${path} failed: HTTP ${restStatus(res.status)}`);
   return res.json();
+}
+
+/**
+ * Mark unconsumed codes for this recipient as consumed, so the unique
+ * active-code index allows a fresh one. A newly requested code supersedes
+ * the previous one (also fixes resend-within-TTL, which 409'd forever).
+ */
+async function retireActiveOtps(
+  deps: AuthVerifyDeps,
+  recipient: string,
+  purpose: "email_verify" | "phone_verify",
+): Promise<void> {
+  await restUpdate(
+    deps,
+    "otp_codes",
+    `recipient=eq.${encodeURIComponent(recipient)}&purpose=eq.${purpose}` +
+      `&consumed_at=is.null`,
+    { consumed_at: deps.now.toISOString() },
+  );
 }
 
 export async function restInsert(
@@ -286,6 +305,7 @@ export async function handleSendEmailOtp(
   const settings = await getSettings(deps);
   const from = settings.resend_from_email ?? depsDefaultFrom();
   const content = buildEmailContent({ template: "email_verify", to: email, code });
+  await retireActiveOtps(deps, email, "email_verify");
   await restInsert(deps, "otp_codes", {
     recipient: email,
     purpose: "email_verify",
@@ -363,6 +383,7 @@ export async function handleSendPhoneOtp(
   }
   const settings = await getSettings(deps);
   const code = generateOtp();
+  await retireActiveOtps(deps, phone, "phone_verify");
   await restInsert(deps, "otp_codes", {
     recipient: phone,
     purpose: "phone_verify",
