@@ -237,4 +237,4 @@ Names only, no values. Nothing is committed: every env file in the repo is an `*
 ## License and credits
 
 - The hackathon code itself has no license file yet; the team retains all rights for the competition.
-- Built by Team Vertex for the UTG-ITCA hackathon, Challenge 01: Citizen Services and Public Complaints. The roster is in [TEAM.md](TEAM.md).
+- Built by Team Vertex for the UTG-ITCA hackathon (Challenge 01: Citizen Services and Public Complaints).
