@@ -60,8 +60,14 @@ jobs:
           set -e
           export SSH="ssh -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key $VPS_HOST"
           export SCP="scp -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key"
-          # database migrations: run every pending db/*.sql on the VPS database
+          # database migrations: run every listed migration that exists in the
+          # checkout (migrations from other in-flight workstreams are skipped
+          # until their owners commit them; idempotent SQL makes re-runs safe)
           for M in backend/db/0015_institution_dashboard.sql backend/db/0016_dispatch.sql backend/db/0017_profile_avatar.sql backend/db/0017_whatsapp_numbers.sql; do
+            if [ ! -f "$M" ]; then
+              echo "skip $M (not in this commit)"
+              continue
+            fi
             N=$(basename "$M")
             $SCP "$M" "$VPS_HOST:/tmp/$N"
             $SSH "docker cp /tmp/$N supabase-db:/tmp/$N && docker exec -i supabase-db psql -U supabase_admin -d postgres -f /tmp/$N && rm -f /tmp/$N"
