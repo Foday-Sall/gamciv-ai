@@ -12,16 +12,16 @@ export default function CTA() {
             See something broken where you live?
           </h2>
           <p className="mt-4 text-muted-foreground">
-            The GamCiv app is coming soon. Sign up to be told when it is live in your area.
+            Report a problem in minutes and follow it until it is fixed. On the web or right from WhatsApp.
           </p>
           <Lift className="mt-8 inline-block">
             <Button asChild size="lg">
-              <a href="mailto:hello@pocketsoftware.dev?subject=GamCiv%20signup">Get early access</a>
+              <a href="https://gamciv.pocketsoftware.dev/app">Get started</a>
             </Button>
           </Lift>
           <p className="mt-6 flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground">
             <GambiaFlag className="h-3 w-auto rounded-[1px]" aria-hidden="true" />
-            Free to use. No account needed. Works on any phone.
+            Free to use. If you can send a WhatsApp, you can fix your street.
           </p>
         </Reveal>
       </div>

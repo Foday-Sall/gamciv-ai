@@ -234,11 +234,14 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
             // New accounts must confirm their email (OTP) before using the app.
             navigate('/verify/email', { replace: true })
           }
-        } else {
-          // Email confirmation is required on this server.
-          toast.info('Check your email', {
-            description: 'We sent a confirmation link. Open it, then sign in.',
+        } else if (data.user) {
+          // Email confirmation is required: show the OTP screen right away
+          // with the address pre-filled (the user has no session yet).
+          navigate('/verify/email', {
+            replace: true,
+            state: { email: email.trim() },
           })
+        } else {
           switchMode('signin')
         }
       } else {
@@ -247,6 +250,15 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
           password,
         })
         if (error) {
+          if (error.message.toLowerCase().includes('email not confirmed')) {
+            // Wrong password would say invalid credentials; this means the
+            // account exists and needs its email verified first.
+            navigate('/verify/email', {
+              replace: true,
+              state: { email: email.trim() },
+            })
+            return
+          }
           setError(authErrorText(error.message))
           return
         }
@@ -295,7 +307,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header>
-        <div className="mx-auto flex h-16 max-w-6xl items-center px-5 md:px-8">
+        <div className="mx-auto flex h-16 w-full max-w-md items-center px-5">
           <a
             href="https://gamciv.pocketsoftware.dev/"
             className="flex items-center gap-2.5 text-lg font-bold tracking-tight font-display"
@@ -401,10 +413,10 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
         </p>
       </main>
 
-      <footer>
-        <div className="mx-auto max-w-6xl px-5 pb-8 text-xs text-muted-foreground md:px-8">
+      <footer className="mx-auto w-full max-w-md px-5 pb-6">
+        <p className="text-center text-xs leading-relaxed text-muted-foreground">
           Free to use. Your reports are public data; your account details are not.
-        </div>
+        </p>
       </footer>
     </div>
   )

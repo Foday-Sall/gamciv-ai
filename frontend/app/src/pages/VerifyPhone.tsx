@@ -1,10 +1,14 @@
 /**
- * VerifyPhone — phone number entry + 6-digit SMS code.
+ * VerifyPhone — phone number entry + 6-digit WhatsApp code.
  *
- * Delivery goes through the project's Supabase instance: `signInWithOtp`
- * sends the SMS, then `verifyOtp` with `type: 'sms'` confirms it. This path
- * is also the fallback when a user's email is unconfirmed but they can prove
- * possession of the phone recorded on their profile.
+ * Two steps:
+ *  1. The user enters their phone number. We call the auth-verify edge
+ *     function (POST /functions/v1/auth-verify/send-phone-otp) with the
+ *     session JWT; it generates a hashed code and sends it via WhatsApp.
+ *  2. The user types the 6-digit code; we call verify-phone-otp, which marks
+ *     profiles.phone_verified and stores the number.
+ *
+ * Requires a signed-in session (reached after email verification).
  */
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -13,14 +17,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { supabase, isNetworkError } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 
 const OTP_LENGTH = 6
 
-/** Light normalization for Gambian numbers: keep digits and a leading +. */
+/** Normalize to bare international digits (matches the server's format). */
 function normalizePhone(raw: string): string {
-  const digits = raw.replace(/[^\d+]/g, '')
-  return digits.startsWith('+') ? digits : `+${digits.replace(/^\+*/, '')}`
+  let digits = raw.replace(/\D/g, '')
+  if (digits.startsWith('00')) digits = digits.slice(2)
+  return digits
 }
 
 export default function VerifyPhone() {
@@ -30,48 +35,93 @@ export default function VerifyPhone() {
   const [stage, setStage] = useState<'phone' | 'code'>('phone')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resendIn, setResendIn] = useState(0)
 
   useEffect(() => {
     document.title = 'Verify phone · GamCiv'
   }, [])
 
-  async function sendCode(e: React.FormEvent) {
-    e.preventDefault()
+  // 60s resend cooldown once a code has been sent.
+  useEffect(() => {
+    if (resendIn <= 0) return
+    const timer = setTimeout(() => setResendIn((s) => s - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [resendIn])
+
+  async function authHeaders(): Promise<Record<string, string> | null> {
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) {
+      navigate('/login', { replace: true })
+      return null
+    }
+    return {
+      Authorization: `Bearer ${token}`,
+      apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ?? '',
+      'Content-Type': 'application/json',
+    }
+  }
+
+  async function sendCode(e?: React.FormEvent) {
+    e?.preventDefault()
     setError(null)
     const normalized = normalizePhone(phone)
-    if (normalized.replace(/\D/g, '').length < 7) {
-      setError('Enter a valid phone number including the country code.')
+    if (normalized.length < 7 || normalized.length > 15) {
+      setError('Enter a valid phone number, for example +220 7 000 000.')
       return
     }
+    const headers = await authHeaders()
+    if (!headers) return
     setBusy(true)
-    const { error } = await supabase.auth.signInWithOtp({ phone: normalized })
-    setBusy(false)
-    if (error) {
-      setError(isNetworkError(error) ? 'Check your connection and try again.' : error.message)
-      return
+    try {
+      const res = await fetch(
+        `${(import.meta.env.VITE_SUPABASE_URL as string).replace(/\/+$/, '')}/functions/v1/auth-verify/send-phone-otp`,
+        { method: 'POST', headers, body: JSON.stringify({ phone: normalized }) },
+      )
+      const body = (await res.json().catch(() => ({}))) as { message?: string }
+      if (!res.ok) {
+        setError(body.message ?? 'Could not send the code. Try again.')
+        return
+      }
+      setStage('code')
+      setResendIn(60)
+    } catch {
+      setError('Check your connection and try again.')
+    } finally {
+      setBusy(false)
     }
-    setStage('code')
   }
 
   async function verifyCode(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     if (token.trim().length !== OTP_LENGTH) {
-      setError('Enter the ' + OTP_LENGTH + '-digit code from the SMS.')
+      setError(`Enter the ${OTP_LENGTH}-digit code sent to your WhatsApp.`)
       return
     }
+    const headers = await authHeaders()
+    if (!headers) return
     setBusy(true)
-    const { error } = await supabase.auth.verifyOtp({
-      phone: normalizePhone(phone),
-      token: token.trim(),
-      type: 'sms',
-    })
-    setBusy(false)
-    if (error) {
-      setError(isNetworkError(error) ? 'Check your connection and try again.' : error.message)
-      return
+    try {
+      const res = await fetch(
+        `${(import.meta.env.VITE_SUPABASE_URL as string).replace(/\/+$/, '')}/functions/v1/auth-verify/verify-phone-otp`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ phone: normalizePhone(phone), code: token.trim() }),
+        },
+      )
+      const body = (await res.json().catch(() => ({}))) as { message?: string }
+      if (!res.ok) {
+        setError(body.message ?? 'That code did not match. Check and try again.')
+        return
+      }
+      navigate('/home', { replace: true })
+    } catch {
+      setError('Check your connection and try again.')
+    } finally {
+      setBusy(false)
     }
-    navigate('/home', { replace: true })
   }
 
   return (
@@ -82,8 +132,8 @@ export default function VerifyPhone() {
           <CardTitle className="font-display text-xl font-bold">Verify your phone</CardTitle>
           <CardDescription>
             {stage === 'phone'
-              ? 'We will text you a one-time code to confirm this number.'
-              : `Enter the ${OTP_LENGTH}-digit code sent to ${normalizePhone(phone)}.`}
+              ? 'We will send a one-time code to this number on WhatsApp to confirm it is yours.'
+              : `Enter the ${OTP_LENGTH}-digit code sent to your WhatsApp.`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -103,13 +153,13 @@ export default function VerifyPhone() {
               </div>
               {error ? <p className="text-sm text-destructive">{error}</p> : null}
               <Button type="submit" disabled={busy} className="w-full">
-                {busy ? 'Sending…' : 'Send code'}
+                {busy ? 'Sending…' : 'Send code on WhatsApp'}
               </Button>
             </form>
           ) : (
             <form onSubmit={verifyCode} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="verify-sms-code">6-digit SMS code</Label>
+                <Label htmlFor="verify-sms-code">6-digit WhatsApp code</Label>
                 <Input
                   id="verify-sms-code"
                   inputMode="numeric"
@@ -126,6 +176,14 @@ export default function VerifyPhone() {
               <Button type="submit" disabled={busy} className="w-full">
                 {busy ? 'Verifying…' : 'Verify phone'}
               </Button>
+              <button
+                type="button"
+                onClick={() => sendCode()}
+                disabled={busy || resendIn > 0}
+                className="w-full text-center text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+              >
+                {resendIn > 0 ? `Resend code available in ${resendIn}s` : 'Resend code'}
+              </button>
               <button
                 type="button"
                 className="w-full text-center text-sm text-muted-foreground underline underline-offset-2"

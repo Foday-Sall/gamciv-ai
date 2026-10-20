@@ -32,14 +32,14 @@ export default function Hero({ reduce }: { reduce: boolean | null }) {
           </motion.p>
           <motion.div variants={fadeUp()} className="mt-9 flex flex-wrap items-center gap-3">
             <Button asChild size="lg">
-              <a href="#report">Get early access</a>
+              <a href="https://gamciv.pocketsoftware.dev/app">Get started</a>
             </Button>
             <Button asChild size="lg" variant="outline">
               <a href="#how">See how it works</a>
             </Button>
           </motion.div>
           <motion.p variants={fadeUp()} className="mt-6 text-sm text-muted-foreground">
-            Free to use. No account needed. Works on any phone.
+            Free to use. If you can send a WhatsApp, you can fix your street.
           </motion.p>
         </motion.div>
 

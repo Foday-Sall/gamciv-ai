@@ -7,7 +7,7 @@
  * than seeing home content.
  */
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,22 +19,59 @@ const OTP_LENGTH = 6
 
 export default function VerifyEmail() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resendIn, setResendIn] = useState(60)
+  const [resent, setResent] = useState(false)
 
   useEffect(() => {
     document.title = 'Verify email · GamCiv'
   }, [])
 
-  // Pre-fill from the session so a signed-in user only needs the code.
+  // Pre-fill: first from the signup/login hand-off (location state), then
+  // from the session for signed-in users who still need confirmation.
   useEffect(() => {
+    const stateEmail = (location.state as { email?: string } | null)?.email
+    if (stateEmail) {
+      setEmail(stateEmail)
+      return
+    }
     supabase.auth.getSession().then(({ data }) => {
       const mail = data.session?.user?.email
       if (mail) setEmail(mail)
     })
-  }, [])
+  }, [location.state])
+
+  // 60s resend cooldown.
+  useEffect(() => {
+    if (resendIn <= 0) return
+    const timer = setTimeout(() => setResendIn((s) => s - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [resendIn])
+
+  async function resendCode() {
+    setError(null)
+    setBusy(true)
+    const { error: err } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+    })
+    setBusy(false)
+    if (err) {
+      if (err.message.toLowerCase().includes('already confirmed')) {
+        // Already verified: let the user continue to sign in.
+        navigate('/login', { replace: true })
+        return
+      }
+      setError(isNetworkError(err) ? 'Check your connection and try again.' : err.message)
+      return
+    }
+    setResent(true)
+    setResendIn(60)
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -54,8 +91,8 @@ export default function VerifyEmail() {
       setError(isNetworkError(error) ? 'Check your connection and try again.' : error.message)
       return
     }
-    // Session is now verified; let role-based home take over.
-    navigate('/home', { replace: true })
+    // Email verified. Next step: verify the phone with the WhatsApp code.
+    navigate('/verify/phone', { replace: true })
   }
 
   return (
@@ -100,6 +137,17 @@ export default function VerifyEmail() {
             <Button type="submit" disabled={busy} className="w-full">
               {busy ? 'Verifying…' : 'Verify email'}
             </Button>
+            <button
+              type="button"
+              onClick={resendCode}
+              disabled={busy || resendIn > 0}
+              className="w-full text-center text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {resendIn > 0 ? `Resend code available in ${resendIn}s` : 'Resend code'}
+            </button>
+            {resent ? (
+              <p className="text-center text-xs text-muted-foreground">A new code was sent.</p>
+            ) : null}
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Wrong address?{' '}
