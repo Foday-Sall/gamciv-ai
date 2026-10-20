@@ -21,7 +21,7 @@ export const supabase = createClient(url, anonKey, {
 })
 
 /** Where staff accounts (officer/admin) belong after signing in. */
-export const STAFF_DASHBOARD_URL = 'https://gamciv.pocketsoftware.dev/dashboard/'
+export const STAFF_DASHBOARD_URL = 'https://dashboard.pocketsoftware.dev/dashboard/'
 
 /**
  * The profiles table is keyed by `user_id` (not `id`) and has no `phone`
