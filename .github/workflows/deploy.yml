@@ -27,14 +27,6 @@ jobs:
             frontend/dashboard/admin/package-lock.json
             frontend/landing/package-lock.json
 
-      - name: Build frontends
-        run: |
-          set -e
-          for d in frontend/app frontend/dashboard/admin frontend/landing; do
-            echo "== building $d"
-            (cd "$d" && npm ci && npm run build)
-          done
-
       - name: Set up SSH
         run: |
           install -m 600 /dev/null /tmp/deploy_key
@@ -45,11 +37,31 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           VPS_HOST_ADDR: ${{ secrets.VPS_HOST_ADDR }}
 
+      - name: Build frontends with VPS Supabase configuration
+        run: |
+          set -eu
+          export SSH="ssh -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key $VPS_HOST"
+          SUPABASE_URL=$($SSH 'sed -n "s/^SUPABASE_PUBLIC_URL=//p" /opt/supabase/docker/.env | head -1' | tr -d '"\r')
+          ANON_KEY=$($SSH 'sed -n "s/^ANON_KEY=//p" /opt/supabase/docker/.env | head -1' | tr -d '"\r')
+          test -n "$SUPABASE_URL"
+          test -n "$ANON_KEY"
+          export VITE_SUPABASE_URL="$SUPABASE_URL"
+          export VITE_SUPABASE_ANON_KEY="$ANON_KEY"
+          for d in frontend/app frontend/dashboard/admin frontend/landing; do
+            echo "== building $d"
+            (cd "$d" && npm ci && npm run build)
+          done
+          unset VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY SUPABASE_URL ANON_KEY
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+
       - name: Deploy to VPS
         run: |
           set -e
-          export SSH="ssh -i /tmp/deploy_key $VPS_HOST"
-          export SCP="scp -i /tmp/deploy_key"
+          export SSH="ssh -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key $VPS_HOST"
+          export SCP="scp -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=no -i /tmp/deploy_key"
+          $SCP backend/db/0015_institution_dashboard.sql "$VPS_HOST:/tmp/0015_institution_dashboard.sql"
+          $SSH "docker cp /tmp/0015_institution_dashboard.sql supabase-db:/tmp/0015_institution_dashboard.sql && docker exec -i supabase-db psql -U supabase_admin -d postgres -f /tmp/0015_institution_dashboard.sql && rm -f /tmp/0015_institution_dashboard.sql"
           # frontends: the nginx image bakes HTML at /usr/share/nginx/html — copy into
           # the running container and reload (the /opt/* staging dirs are scratch)
           $SSH "mkdir -p /opt/gamciv-app/html /opt/gamciv-dashboard/html /opt/gamciv-landing/html"

@@ -10,6 +10,21 @@ export type InstituteUser = {
   institutionName: string
 }
 
+export type InstituteDashboardStats = {
+  institution: { id: string; code: string; name: string }
+  total: number
+  today: number
+  open: number
+  resolved_week: number
+  overdue: number
+  avg_resolution_hours: number
+  by_status: Array<{ status: string; count: number }>
+  by_category: Array<{ category: string; count: number }>
+  by_channel: Array<{ channel: string; count: number }>
+  by_urgency: Array<{ urgency: string; count: number }>
+  daily: Array<{ date: string; received: number; resolved: number }>
+}
+
 /** Look up the signed-in user's officers row; null when they are not staff. */
 export async function getInstituteUser(userId: string): Promise<InstituteUser | null> {
   const { data, error } = await supabase
@@ -26,6 +41,16 @@ export async function getInstituteUser(userId: string): Promise<InstituteUser | 
     institutionId: data.institution_id as string,
     institutionName: inst?.name ?? 'Institution',
   }
+}
+
+/** Load aggregate metrics for the signed-in officer's institution only. */
+export async function getInstituteDashboardStats(): Promise<InstituteDashboardStats | null> {
+  const { data, error } = await supabase.rpc('fn_institution_dashboard_stats')
+  if (error || !data || (data as { ok?: boolean }).ok === false) {
+    if (error) console.error('institution dashboard stats failed:', error.message)
+    return null
+  }
+  return data as InstituteDashboardStats
 }
 
 const NOTE_MIN = 10

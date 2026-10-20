@@ -14,7 +14,7 @@
  * 0005_escalation.sql): accept, reject, request info, set status, attach
  * proof and forward.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Inbox, RefreshCw, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -33,8 +33,10 @@ import {
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
+  ChartLegend,
+  ChartLegendContent,
 } from '@/components/ui/chart'
-import { Bar, BarChart, CartesianGrid, Area, AreaChart, XAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Area, AreaChart, XAxis, YAxis, Pie, PieChart, Cell, RadialBar, RadialBarChart, PolarAngleAxis } from 'recharts'
 import { useSession } from '@/hooks/useSession'
 import { supabase, getProfile } from '@/lib/supabase'
 import { statusMeta } from '@/lib/gamciv'
@@ -49,6 +51,8 @@ import {
   officerAttachProof,
   officerForward,
   type InstituteUser,
+  type InstituteDashboardStats,
+  getInstituteDashboardStats,
 } from '@/lib/institute'
 
 const PAGE_SIZE = 50
@@ -82,11 +86,6 @@ const OPEN_STATUSES = new Set([
   'escalated',
   'reopened',
 ])
-
-/** UTC day key, e.g. "2026-10-19". */
-function dayKey(iso: string): string {
-  return new Date(iso).toISOString().slice(0, 10)
-}
 
 function UrgencyBadge({ urgency }: { urgency: string }) {
   const map: Record<string, string> = {
@@ -125,6 +124,7 @@ export default function InstituteDashboard() {
   const [loadFailed, setLoadFailed] = useState(false)
   const [filter, setFilter] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [dashboardStats, setDashboardStats] = useState<InstituteDashboardStats | null>(null)
   const [institutions, setInstitutions] = useState<
     Array<{ id: string; name: string; logo: string | null }>
   >([])
@@ -163,7 +163,7 @@ export default function InstituteDashboard() {
     const { data, error } = await supabase
       .from('complaints')
       .select(
-        'id, tracking_no, title, description, urgency, status, created_at, updated_at, citizen_name, citizen_phone, resolution_photo_url, institution_id',
+        'id, tracking_no, title, description, urgency, status, created_at, updated_at, citizen_name, citizen_phone, resolution_photo_url, institution_id, categories(name)',
       )
       .eq('institution_id', institutionId)
       .order('created_at', { ascending: false })
@@ -174,17 +174,23 @@ export default function InstituteDashboard() {
       setRows([])
     } else {
       setLoadFailed(false)
-      setRows((data as unknown as Complaint[]) ?? [])
+      setRows(
+        ((data as Array<Complaint & { categories?: { name?: string } | null }> | null) ?? []).map((row) => ({
+          ...row,
+          category_name: row.categories?.name ?? null,
+        })),
+      )
     }
     setLoading(false)
   }, [])
 
-  // Load the feed once the staff user is known; realtime handles updates after.
+  // Load the feed and database-backed aggregates once the staff user is known.
   useEffect(() => {
     if (!staff?.institutionId) return
     if (lastLoadedInstRef.current === staff.institutionId) return
     lastLoadedInstRef.current = staff.institutionId
-    loadFeed(staff.institutionId)
+    void loadFeed(staff.institutionId)
+    void getInstituteDashboardStats().then(setDashboardStats)
   }, [staff?.institutionId, loadFeed])
 
   // Realtime: new complaints appear live; status changes refresh in place.
@@ -245,60 +251,47 @@ export default function InstituteDashboard() {
     }
   }, [])
 
-  const stats = useMemo(() => {
-    const now = Date.now()
-    const todayKey = dayKey(new Date().toISOString())
-    const weekAgo = now - 7 * 86400000
-    const today = rows.filter((c) => dayKey(c.created_at) === todayKey).length
-    const open = rows.filter((c) => OPEN_STATUSES.has(c.status)).length
-    const resolvedWeek = rows.filter(
-      (c) => c.status === 'resolved' && new Date(c.updated_at ?? c.created_at).getTime() >= weekAgo,
-    ).length
-    const resolvedDurations = rows
-      .filter((c) => c.status === 'resolved')
-      .map((c) => new Date(c.updated_at ?? c.created_at).getTime() - new Date(c.created_at).getTime())
-      .filter((ms) => ms > 0)
-    const avgH =
-      resolvedDurations.length > 0
-        ? resolvedDurations.reduce((a, b) => a + b, 0) / resolvedDurations.length / 3600000
-        : 0
-    return { today, open, resolvedWeek, avgH }
-  }, [rows])
+  const stats = dashboardStats ?? {
+    total: rows.length,
+    today: 0,
+    open: rows.filter((c) => OPEN_STATUSES.has(c.status)).length,
+    resolved_week: 0,
+    overdue: 0,
+    avg_resolution_hours: 0,
+    by_status: [],
+    by_category: [],
+    by_channel: [],
+    by_urgency: [],
+    daily: [],
+    institution: { id: staff?.institutionId ?? '', code: '', name: staff?.institutionName ?? 'Institution' },
+  }
 
-  const categoryData = useMemo(() => {
-    const weekAgo = Date.now() - 7 * 86400000
-    const counts = new Map<string, number>()
-    for (const c of rows) {
-      if (new Date(c.created_at).getTime() < weekAgo) continue
-      counts.set(c.title, (counts.get(c.title) ?? 0) + 1)
-    }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([label, count], i) => ({ label, count, fill: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }))
-  }, [rows])
-
-  const trendData = useMemo(() => {
-    const days: Array<{ day: string; label: string; count: number }> = []
-    const counts = new Map<string, number>()
-    for (const c of rows) counts.set(dayKey(c.created_at), (counts.get(dayKey(c.created_at)) ?? 0) + 1)
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000)
-      const key = dayKey(d.toISOString())
-      days.push({
-        day: key,
-        label: d.toLocaleDateString(undefined, { weekday: 'short' }),
-        count: counts.get(key) ?? 0,
-      })
-    }
-    return days
-  }, [rows])
-
-  const chartConfig = useMemo(() => {
-    const cfg: ChartConfig = { count: { label: 'Complaints' } }
-    for (const entry of categoryData) cfg[entry.label] = { label: entry.label, color: entry.fill }
-    return cfg
-  }, [categoryData])
+  const categoryData = stats.by_category.map((entry, index) => ({
+    label: entry.category,
+    count: entry.count,
+    fill: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+  }))
+  const trendData = stats.daily.map((entry) => ({
+    ...entry,
+    label: new Date(`${entry.date}T00:00:00Z`).toLocaleDateString(undefined, { weekday: 'short' }),
+  }))
+  const channelData = stats.by_channel.map((entry, index) => ({
+    name: entry.channel[0].toUpperCase() + entry.channel.slice(1),
+    value: entry.count,
+    fill: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+  }))
+  const statusData = stats.by_status
+    .filter((entry) => entry.count > 0)
+    .map((entry) => ({
+      name: entry.status.replaceAll('_', ' '),
+      value: entry.count,
+      fill: entry.status === 'closed' || entry.status === 'resolved' ? 'var(--chart-2)' : entry.status === 'rejected' ? 'var(--chart-5)' : 'var(--chart-3)',
+    }))
+  const chartConfig = {
+    received: { label: 'Received', color: 'var(--chart-2)' },
+    resolved: { label: 'Resolved', color: 'var(--chart-1)' },
+    count: { label: 'Complaints', color: 'var(--chart-2)' },
+  } satisfies ChartConfig
 
   /** Run one action with busy state + a refresh fallback for realtime. */
   const runAction = useCallback(
@@ -309,7 +302,10 @@ export default function InstituteDashboard() {
       if (ok) {
         toast.success('Done')
         const inst = staffRef.current
-        if (inst) void loadFeed(inst.institutionId)
+        if (inst) {
+          void loadFeed(inst.institutionId)
+          void getInstituteDashboardStats().then(setDashboardStats)
+        }
       }
     },
     [loadFeed],
@@ -402,81 +398,91 @@ export default function InstituteDashboard() {
 
       {/* ── Stat cards ──────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Complaints today" value={stats.today} hint="Filed since midnight UTC" />
-        <StatCard label="Open / in progress" value={stats.open} hint="Not yet resolved or closed" />
-        <StatCard label="Resolved this week" value={stats.resolvedWeek} hint="Last 7 days" />
+        <StatCard label="Complaints today" value={stats.today} hint="Filed since midnight" />
+        <StatCard label="Open cases" value={stats.open} hint="Not resolved or rejected" />
+        <StatCard label="Resolved this week" value={stats.resolved_week} hint="Resolved in the last 7 days" />
         <StatCard
-          label="Avg resolution time"
-          value={
-            stats.avgH >= 1
-              ? `${stats.avgH.toFixed(1)} h`
-              : stats.avgH > 0
-                ? `${Math.round(stats.avgH * 60)} min`
-                : '—'
-          }
-          hint="Across resolved complaints"
+          label="Overdue cases"
+          value={stats.overdue}
+          hint="Past response deadline"
         />
       </div>
 
-      {/* ── Charts ──────────────────────────────────────────────── */}
+      {/* Live analytics powered by the institution-scoped database RPC. */}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base">Complaints by category</CardTitle>
-            <CardDescription>Last 7 days · top categories</CardDescription>
+            <CardTitle className="text-base">Complaint flow</CardTitle>
+            <CardDescription>Received and resolved over the last 14 days</CardDescription>
           </CardHeader>
           <CardContent>
-            {categoryData.length === 0 ? (
-              <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-                No complaints in the last 7 days
-              </div>
-            ) : (
-              <ChartContainer config={chartConfig} className="h-48 w-full">
-                <BarChart data={categoryData} margin={{ left: -24, right: 8 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="label"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                    tick={{ fontSize: 11 }}
-                    interval={0}
-                  />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="count" radius={4} />
-                </BarChart>
-              </ChartContainer>
-            )}
+            <ChartContainer config={chartConfig} className="h-56 w-full">
+              <AreaChart data={trendData} margin={{ left: -24, right: 8 }}>
+                <defs>
+                  <linearGradient id="receivedFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--color-received)" stopOpacity={0.32} />
+                    <stop offset="95%" stopColor="var(--color-received)" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} tick={{ fontSize: 11 }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} allowDecimals={false} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Area dataKey="received" type="monotone" fill="url(#receivedFill)" stroke="var(--color-received)" strokeWidth={2} />
+                <Area dataKey="resolved" type="monotone" fill="transparent" stroke="var(--color-resolved)" strokeWidth={2} />
+              </AreaChart>
+            </ChartContainer>
           </CardContent>
         </Card>
 
         <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base">Daily trend</CardTitle>
-            <CardDescription>Complaints filed per day · last 7 days</CardDescription>
+            <CardTitle className="text-base">Complaints by category</CardTitle>
+            <CardDescription>All cases routed to this institution</CardDescription>
           </CardHeader>
           <CardContent>
-            <ChartContainer config={{ count: { label: 'Complaints' } }} className="h-48 w-full">
-              <AreaChart data={trendData} margin={{ left: -24, right: 8 }}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="label"
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                  tick={{ fontSize: 11 }}
-                  interval={0}
-                />
+            <ChartContainer config={chartConfig} className="h-56 w-full">
+              <BarChart data={categoryData} layout="vertical" margin={{ left: 8, right: 12 }}>
+                <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                <XAxis type="number" hide />
+                <YAxis dataKey="label" type="category" width={92} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Area
-                  dataKey="count"
-                  type="monotone"
-                  fill="var(--chart-2)"
-                  fillOpacity={0.25}
-                  stroke="var(--chart-2)"
-                  strokeWidth={2}
-                />
-              </AreaChart>
+                <Bar dataKey="count" radius={5} />
+              </BarChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base">Intake channels</CardTitle>
+            <CardDescription>How citizens reached GamCiv</CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-center">
+            <ChartContainer config={chartConfig} className="h-56 w-full max-w-md">
+              <PieChart>
+                <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                <Pie data={channelData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={82} paddingAngle={3}>
+                  {channelData.map((entry) => <Cell key={entry.name} fill={entry.fill} />)}
+                </Pie>
+                <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+              </PieChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base">Case health</CardTitle>
+            <CardDescription>Open versus completed workload</CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-center">
+            <ChartContainer config={chartConfig} className="h-56 w-full max-w-md">
+              <RadialBarChart data={statusData} innerRadius="24%" outerRadius="88%" startAngle={90} endAngle={-270} barSize={18}>
+                <PolarAngleAxis type="number" domain={[0, Math.max(stats.total, 1)]} tick={false} />
+                <RadialBar dataKey="value" background cornerRadius={6} />
+                <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+              </RadialBarChart>
             </ChartContainer>
           </CardContent>
         </Card>
@@ -550,7 +556,7 @@ export default function InstituteDashboard() {
                         <div className="min-w-0">
                           <CardTitle className="truncate text-base">{c.title}</CardTitle>
                           <CardDescription className="truncate">
-                            {c.tracking_no} · {timeAgo(c.created_at)}
+                            {c.tracking_no} · {timeAgo(c.created_at)}{c.category_name ? ` · ${c.category_name}` : ''}
                             {c.citizen_name ? ` · ${c.citizen_name}` : ''}
                             {c.citizen_phone ? ` · ${c.citizen_phone}` : ''}
                           </CardDescription>

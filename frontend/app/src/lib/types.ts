@@ -12,4 +12,5 @@ export type Complaint = {
   citizen_phone: string | null
   resolution_photo_url: string | null
   institution_id: string | null
+  category_name?: string | null
 }
