@@ -306,18 +306,6 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header>
-        <div className="mx-auto flex h-20 w-full max-w-md items-center justify-center px-5">
-          <a
-            href="https://gamciv.pocketsoftware.dev/"
-            className="flex items-center gap-2.5 text-lg font-bold tracking-tight font-display"
-          >
-            <GamCivMark className="h-9 w-9 rounded-xl shadow-sm" />
-            GamCiv
-          </a>
-        </div>
-      </header>
-
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-5 py-10">
         <section className="w-full rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
           <div className="flex flex-col items-center text-center">
