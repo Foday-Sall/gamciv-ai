@@ -125,10 +125,35 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState<'form' | 'google' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+  const [resetMode, setResetMode] = useState(false)
+  const [resetBusy, setResetBusy] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
 
   const isSignup = mode === 'signup'
+
+  async function sendReset() {
+    setError(null)
+    if (!email.trim() || !email.includes('@')) {
+      setError('Enter your email address first, then tap the reset link.')
+      return
+    }
+    setResetBusy(true)
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: window.location.origin + '/app/',
+      })
+      if (err) {
+        setError(friendlyAuthError(err))
+      } else {
+        setInfo(`Reset link sent to ${email.trim()}. Check your inbox — the link is valid for one hour.`)
+        setResetMode(false)
+      }
+    } finally {
+      setResetBusy(false)
+    }
+  }
 
   // The Supabase OAuth callback can land back on /app/ with error query/fragment
   // parameters (e.g. an expired state when the user stalls on the Google consent
@@ -354,10 +379,51 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
               </div>
             )}
 
-            <Button type="submit" className="h-11 w-full text-base" disabled={busy !== null}>
-              {formBusy ? <Loader2 className="animate-spin" /> : null}
-              {isSignup ? 'Sign up' : 'Sign in'}
-            </Button>
+            {resetMode ? (
+              <>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto w-full justify-center px-0 text-sm"
+                  onClick={() => { setResetMode(false); setError(null) }}
+                >
+                  ← Back to sign in
+                </Button>
+                <Button
+                  type="button"
+                  className="h-11 w-full text-base"
+                  disabled={resetBusy}
+                  onClick={sendReset}
+                >
+                  {resetBusy ? <Loader2 className="animate-spin" /> : null}
+                  Send reset link
+                </Button>
+              </>
+            ) : (
+              <Button type="submit" className="h-11 w-full text-base" disabled={busy !== null}>
+                {formBusy ? <Loader2 className="animate-spin" /> : null}
+                {isSignup ? 'Sign up' : 'Sign in'}
+              </Button>
+            )}
+
+            {info && (
+              <div
+                role="status"
+                className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2.5 text-sm text-primary"
+              >
+                {info}
+              </div>
+            )}
+
+            {!isSignup && !resetMode && (
+              <button
+                type="button"
+                onClick={() => { setResetMode(true); setError(null); setInfo(null) }}
+                className="mx-auto block text-sm font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Forgot password?
+              </button>
+            )}
           </form>
 
           <div className="my-6 flex items-center gap-3">
