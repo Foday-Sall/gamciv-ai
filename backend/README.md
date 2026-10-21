@@ -1,82 +1,39 @@
-# GamCiv AI — Edge Functions API layer
+# Backend
 
-Deno edge functions for the GamCiv AI public complaints system (UTG-ITCA hackathon). Per the
-architecture lock, edge functions are **thin connectors only**:
+This folder contains the database and server-side code for GamCiv AI.
 
-- **whatsapp-intake** — GOWA webhook → verify HMAC → extract report → classify via an
-  OpenAI-compatible chat completion → ONE `rpc submit_complaint` call → GOWA confirmation message.
-  All routing/deadline/grouping logic lives in the SQL function.
-- **meta-whatsapp-intake** — same pipeline for the Meta WhatsApp Business Cloud API
-  (plug-in ready: works, awaiting API key + phone number ID).
-- **telegram-intake** — same pipeline for the Telegram bot channel.
-- **notify-out** — DB (pg_net) → single POST → GOWA (WhatsApp) or the configured SMS provider
-  (Termii, or a TextBee-style Android HTTP gateway), with the delivery result reported back via
-  `rpc notify_out_result`.
+- `db/` — PostgreSQL schema, migrations, permissions, and report-routing rules.
+- `functions/` — Supabase Edge Functions for WhatsApp and Telegram webhooks, AI classification, photo uploads, authentication, and notifications.
+- `channels/` — setup notes for WhatsApp, Telegram, and SMS.
+- `tests/` — backend tests that use mocked network calls.
 
-Everything else (citizen tracking, officer queue, admin, public map) is plain PostgREST from the
-frontend — no functions involved.
+Report routing and access checks are enforced by PostgreSQL functions and row-level security. Do not put private provider keys in frontend code.
 
-## Messaging channels
+## Run backend checks
 
-Per-channel documentation lives in [`channels/`](channels/) — one self-contained folder per
-channel with setup notes and pointers to the function source (the deploy layout below is
-unaffected):
-
-- [`channels/whatsapp/`](channels/whatsapp/) — personal WhatsApp via GOWA (live)
-- [`channels/whatsapp-business/`](channels/whatsapp-business/) — Meta Cloud API (plug-in ready)
-- [`channels/telegram/`](channels/telegram/) — Telegram bot
-- [`channels/sms/`](channels/sms/) — outbound SMS, Android gateway primary + Termii fallback
-  ([`channels/sms/providers/`](channels/sms/providers/))
-
-```
-channels/         # per-channel docs + pointers to the function source (this is docs only)
-  whatsapp/           # personal WhatsApp via GOWA
-  whatsapp-business/  # Meta Cloud API (plug-in ready)
-  telegram/           # Telegram bot
-  sms/                # outbound SMS; providers/ = android-gateway, termii, provider-selection
-functions/
-  main/           # dispatcher (upstream Supabase self-hosted template; routes
-                  # /functions/v1/<name> to a user worker per function dir)
-  _shared/        # aiClient, gowaClient, termii, rpcClient, config, http, types
-  whatsapp-intake/
-  meta-whatsapp-intake/
-  telegram-intake/
-  notify-out/     # smsProvider.ts: termii or http_gateway (TextBee-style) via SMS_PROVIDER
-tests/            # deno test (unit, stubbed network)
-docs/sql-contract.md  # RPC contract the SQL side must implement
-```
-
-## Local development
+Install Deno 2, then run:
 
 ```bash
-deno check --all functions/whatsapp-intake/index.ts functions/notify-out/index.ts
-deno test --allow-all tests/
+cd backend
+deno lint
+deno test --allow-all
 ```
 
-## Deploy (self-hosted Supabase)
+The same checks run in GitHub Actions.
 
-The stack runs at `/opt/supabase/docker` with the edge-runtime mounting `./volumes/functions`.
-Deploy = copy the tree + restart the service:
+## Deploy
 
-```bash
-VPS_HOST=user@your-server SSH_KEY=/path/to/key bash scripts/deploy.sh
-```
+Routine production deploys are automatic:
 
-Secrets live in `/opt/supabase/docker/.env.functions` (see `.env.functions.example`), wired into the
-container via `env_file` in `docker-compose.yml`.
+1. Configure the VPS and self-hosted Supabase stack using the [deployment guide](../DEPLOY.md).
+2. Add `DEPLOY_SSH_KEY`, `VPS_HOST`, and `VPS_HOST_ADDR` under the repository’s **Settings → Secrets and variables → Actions**.
+3. Push to `main`. CI must pass; then the **Deploy** workflow copies the edge functions to the VPS and restarts the functions service.
 
-Public endpoints (via Cloudflare tunnel):
+The function environment template is [`.env.functions.example`](.env.functions.example). Keep real values on the server or in the approved secret-management flow; never commit them.
 
-- `https://api.pocketsoftware.dev/functions/v1/whatsapp-intake` — GOWA webhook target
-- `https://api.pocketsoftware.dev/functions/v1/notify-out` — called by pg_net only
+## Channel setup
 
-## Verification status
-
-- `deno check` clean, 41 unit tests passing (classifier parser, webhook HMAC, envelope extraction,
-  intake pipeline, notify-out pipeline — all with stubbed deps).
-- Deployed and verified live: signature verification (401 on bad/missing HMAC), greeting onboarding,
-  classification → RPC call shape (PostgREST confirms the exact parameter list), notify-out auth +
-  dispatch.
-- Blocked on the parallel DB agent creating `public.submit_complaint`, `public.notify_out_claim`,
-  `public.notify_out_result` + tables (see `docs/sql-contract.md`). The functions will succeed once
-  those exist.
+- [WhatsApp via GOWA](channels/whatsapp/)
+- [Telegram](docs/telegram-golive.md)
+- [SMS](channels/sms/)
+- [SQL and RPC contract](docs/sql-contract.md)
