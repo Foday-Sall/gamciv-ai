@@ -415,7 +415,7 @@ export default function Report() {
         setPhotoUploadFailed(!!failureCode)
         setPhotoUploadFailureCode(failureCode)
         if (failureCode) {
-          toast.warning(`Report filed, but its photo was not attached. Error reference: ${failureCode}. Retry the photo upload on the confirmation screen.`)
+          toast.warning(`Report filed, but we could not confirm the photo was attached. Error reference: ${failureCode}. Retry on the confirmation screen.`)
         }
       }
 
@@ -951,7 +951,7 @@ export default function Report() {
             {photoFile && photoUploadFailed && (
               <div role="alert" className="mt-5 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-left">
                 <p className="text-sm font-medium text-destructive">
-                  Your report was filed, but its photo could not be attached. The dashboard has no photo to show yet.
+                  Your report was filed, but we could not confirm the photo attachment. It may already be attached. Retry to check or finish the upload.
                 </p>
                 {photoUploadFailureCode && (
                   <p className="mt-2 text-xs text-muted-foreground">

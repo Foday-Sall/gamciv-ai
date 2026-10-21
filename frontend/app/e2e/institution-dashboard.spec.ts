@@ -46,8 +46,14 @@ const corsHeaders = {
   "access-control-max-age": "86400",
 };
 
-async function installOfficerMocks(page: Page, failDashboardData = false, initialStatus = "in_progress") {
+async function installOfficerMocks(
+  page: Page,
+  failDashboardData = false,
+  initialStatus = "in_progress",
+  delayedCitizenPhoto = false,
+) {
   let complaintQueryWasInstitutionScoped = false;
+  let detailCalls = 0;
   let complaintStatus = initialStatus;
   let resolutionPhotoPath: string | null = null;
   let resolutionNote: string | null = null;
@@ -187,6 +193,10 @@ async function installOfficerMocks(page: Page, failDashboardData = false, initia
     }
 
     if (url.pathname.endsWith("/rpc/fn_officer_complaint_detail")) {
+      detailCalls += 1;
+      const photoPath = delayedCitizenPhoto && detailCalls > 1
+        ? "00000000-0000-4000-8000-000000000333/photo.png"
+        : null;
       await route.fulfill({
         status: 200,
         headers: { ...corsHeaders, "content-type": "application/json" },
@@ -205,10 +215,12 @@ async function installOfficerMocks(page: Page, failDashboardData = false, initia
             region: "Kanifing",
             council_area: "Kanifing Municipal Council",
             ward: "Kanifing",
-            created_at: "2026-10-19T10:00:00.000Z",
+            created_at: delayedCitizenPhoto
+              ? new Date(Date.now() - 30_000).toISOString()
+              : "2026-10-19T10:00:00.000Z",
             updated_at: "2026-10-19T11:00:00.000Z",
-            is_anonymous: true,
-            photo_url: null,
+            is_anonymous: !delayedCitizenPhoto,
+            photo_url: photoPath,
             resolution_photo_url: resolutionPhotoPath,
             resolution_note: resolutionNote,
             contact: null,
@@ -290,6 +302,7 @@ async function installOfficerMocks(page: Page, failDashboardData = false, initia
 
   return {
     complaintQueryWasInstitutionScoped: () => complaintQueryWasInstitutionScoped,
+    detailCalls: () => detailCalls,
     resolutionPhotoParamWasNull: () => resolutionPhotoParamWasNull,
     resolutionPhotoUploadAttempted: () => resolutionPhotoUploadAttempted,
     reopenedReportWasRestarted: () => reopenedReportWasRestarted,
@@ -354,6 +367,21 @@ test("officers see only their institution and are redirected away from admin sec
   if (process.env.GAMCIV_DASHBOARD_SCREENSHOT === "1") {
     await page.screenshot({ path: "/tmp/gamciv-institution-dashboard.png", fullPage: true });
   }
+});
+
+test("report details pick up a citizen photo attached after the dialog first opens", async ({ page }) => {
+  const mocks = await installOfficerMocks(page, false, "in_progress", true);
+  await page.goto(new URL("/dash/", dashboardOrigin).toString());
+  await page.getByRole("navigation", { name: "Officer navigation" }).getByRole("button", { name: "Complaint queue" }).click();
+
+  const queueRow = page.locator("#complaints tbody tr").filter({ hasText: "GC-NAWEC-001" });
+  await queueRow.locator("td").nth(1).click();
+  const details = page.getByRole("dialog", { name: "Report details" });
+  await expect(details.getByText("Checking for a recently uploaded photo...")).toBeVisible();
+  const photo = details.getByRole("img", { name: "Photo submitted with report GC-NAWEC-001" });
+  await expect(photo).toBeVisible({ timeout: 10_000 });
+  await expect(photo).toHaveAttribute("src", /complaint-photos/);
+  expect(mocks.detailCalls()).toBeGreaterThanOrEqual(2);
 });
 
 test("officers can accept a report, start work, and report a fix without uploading a photo", async ({ page }) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { AlertCircle, CheckCircle2, Loader2, Mail, MapPin, Phone, Play, RefreshCw, ShieldCheck } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -35,6 +35,10 @@ type ComplaintDetail = {
 }
 
 type DetailResult = { ok: boolean; error?: string; complaint?: ComplaintDetail }
+
+const RECENT_COMPLAINT_WINDOW_MS = 5 * 60 * 1000
+const PHOTO_ATTACHMENT_POLL_INTERVAL_MS = 2500
+const PHOTO_ATTACHMENT_POLL_DURATION_MS = 30_000
 
 function formatLabel(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
@@ -85,9 +89,13 @@ export function ComplaintDetailsDialog({
   const [statusError, setStatusError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
+  const photoPollStartedRef = useRef<{ complaintId: string; startedAt: number } | null>(null)
+  const [checkingRecentPhoto, setCheckingRecentPhoto] = useState(false)
 
   useEffect(() => {
     if (!complaintId) {
+      photoPollStartedRef.current = null
+      setCheckingRecentPhoto(false)
       setComplaint(null)
       setError(null)
       setCitizenPhoto(null)
@@ -97,6 +105,10 @@ export function ComplaintDetailsDialog({
       setActionError(null)
       setActionSuccess(null)
       return
+    }
+
+    if (photoPollStartedRef.current?.complaintId !== complaintId) {
+      photoPollStartedRef.current = { complaintId, startedAt: Date.now() }
     }
 
     const controller = new AbortController()
@@ -148,6 +160,40 @@ export function ComplaintDetailsDialog({
 
     return () => controller.abort()
   }, [complaintId, retry, refreshSignal])
+
+  useEffect(() => {
+    const pollStart = photoPollStartedRef.current
+    if (
+      !complaintId || !complaint || complaint.id !== complaintId || complaint.photo_url ||
+      citizenPhoto || pollStart?.complaintId !== complaintId
+    ) {
+      setCheckingRecentPhoto(false)
+      return
+    }
+
+    const createdAt = Date.parse(complaint.created_at)
+    const age = Date.now() - createdAt
+    if (!Number.isFinite(createdAt) || age < -60_000 || age > RECENT_COMPLAINT_WINDOW_MS) {
+      setCheckingRecentPhoto(false)
+      return
+    }
+
+    const remaining = PHOTO_ATTACHMENT_POLL_DURATION_MS - (Date.now() - pollStart.startedAt)
+    if (remaining <= 0) {
+      setCheckingRecentPhoto(false)
+      return
+    }
+
+    setCheckingRecentPhoto(true)
+    const timeoutId = window.setTimeout(() => {
+      if (Date.now() - pollStart.startedAt >= PHOTO_ATTACHMENT_POLL_DURATION_MS) {
+        setCheckingRecentPhoto(false)
+        return
+      }
+      setRetry((value) => value + 1)
+    }, Math.min(PHOTO_ATTACHMENT_POLL_INTERVAL_MS, remaining))
+    return () => window.clearTimeout(timeoutId)
+  }, [complaintId, complaint?.id, complaint?.created_at, complaint?.photo_url, citizenPhoto, retry])
 
   const contact = complaint?.is_anonymous ? null : complaint?.contact
   const phone = contact?.phone?.trim() || null
@@ -277,7 +323,13 @@ export function ComplaintDetailsDialog({
                     <span className="mt-2 inline-block text-xs text-primary underline-offset-4 hover:underline">Open full-size photo</span>
                   </a>
                 ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">{complaint.photo_url ? "The submitted photo is unavailable right now." : "No photo was submitted with this report."}</p>
+                  <p className="mt-2 text-sm text-muted-foreground" role={checkingRecentPhoto ? "status" : undefined}>
+                    {complaint.photo_url
+                      ? "The submitted photo is unavailable right now."
+                      : checkingRecentPhoto
+                        ? "Checking for a recently uploaded photo..."
+                        : "No photo was submitted with this report."}
+                  </p>
                 )}
               </div>
               <div className="rounded-xl border border-border p-4">

@@ -13,6 +13,7 @@ const CORS_HEADERS = {
 export interface CitizenPhotoUploadDeps {
   supabaseUrl: string;
   serviceRoleKey: string;
+  anonKey?: string;
   fetchImpl: typeof fetch;
 }
 
@@ -238,44 +239,54 @@ export async function handleCitizenPhotoUpload(
     return jsonResponse({ error: "storage_upload_failed" }, 502);
   }
 
+  let attachResponse: Response;
   try {
-    const updateUrl = new URL(`${baseUrl}/rest/v1/complaints`);
-    updateUrl.searchParams.set("id", `eq.${complaintIdValue}`);
-    updateUrl.searchParams.set("citizen_id", `eq.${user.id}`);
-    updateUrl.searchParams.set("channel", "eq.web");
-    updateUrl.searchParams.set("is_anonymous", "eq.false");
-    const updateResponse = await deps.fetchImpl(updateUrl, {
-      method: "PATCH",
+    attachResponse = await deps.fetchImpl(`${baseUrl}/rest/v1/rpc/attach_photo`, {
+      method: "POST",
       headers: {
-        ...adminHeaders(deps),
+        Authorization: `Bearer ${token}`,
+        apikey: deps.anonKey?.trim() || deps.serviceRoleKey,
         "Content-Type": "application/json",
-        Prefer: "return=representation",
       },
-      body: JSON.stringify({ photo_url: objectPath }),
+      body: JSON.stringify({ p_complaint_id: complaintIdValue, p_path: objectPath }),
     });
-    if (!updateResponse.ok) {
-      console.error("citizen photo report update failed:", updateResponse.status);
+  } catch {
+    console.error("citizen photo attachment result is unconfirmed");
+    return jsonResponse({ error: "photo_attach_unconfirmed" }, 502);
+  }
+
+  if (!attachResponse.ok) {
+    if (attachResponse.status >= 400 && attachResponse.status < 500) {
       await removeUploadedObject(deps, objectPath);
       return jsonResponse({ error: "photo_attach_failed" }, 502);
     }
-    const updated = await updateResponse.json() as Array<{ id?: string }>;
-    if (!Array.isArray(updated) || updated.length === 0) {
-      await removeUploadedObject(deps, objectPath);
-      return jsonResponse({ error: "report_not_owned" }, 403);
-    }
+    console.error("citizen photo attachment result is unconfirmed:", attachResponse.status);
+    return jsonResponse({ error: "photo_attach_unconfirmed" }, 502);
+  }
+
+  let attached: unknown;
+  try {
+    attached = await attachResponse.json();
   } catch {
-    console.error("citizen photo report update failed");
+    console.error("citizen photo attachment response could not be verified");
+    return jsonResponse({ error: "photo_attach_unconfirmed" }, 502);
+  }
+
+  if (attached === true) return jsonResponse({ ok: true });
+  if (attached === false) {
     await removeUploadedObject(deps, objectPath);
     return jsonResponse({ error: "photo_attach_failed" }, 502);
   }
 
-  return jsonResponse({ ok: true });
+  console.error("citizen photo attachment returned an unexpected result");
+  return jsonResponse({ error: "photo_attach_unconfirmed" }, 502);
 }
 
 if (import.meta.main) {
   const deps: CitizenPhotoUploadDeps = {
     supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
     serviceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+    anonKey: Deno.env.get("SUPABASE_ANON_KEY") ?? undefined,
     fetchImpl: fetch,
   };
   Deno.serve((request) => handleCitizenPhotoUpload(request, deps));
