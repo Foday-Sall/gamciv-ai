@@ -1,21 +1,22 @@
 /**
- * /track — look up a report by tracking number and show its status timeline.
+ * /track - look up a report by tracking number and show its status timeline.
  * Data comes from the real `track_complaint` RPC (SECURITY DEFINER), which
  * works with or without an account; complaint rows themselves are not
  * anon-readable (RLS). Unknown numbers return null, which we show as "not
  * found". Network failures get their own message so a dead connection is not
  * mistaken for a bad tracking number.
  */
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { CheckCircle2, Clock, CircleAlert, Search, Loader2 } from 'lucide-react'
+import { CheckCircle2, Clock, CircleAlert, Search, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { handleAuthExpired, isAuthError, isNetworkError, supabase } from '@/lib/supabase'
 import { statusMeta } from '@/lib/gamciv'
+import { useSession } from '@/hooks/useSession'
 
 type TimelineItem = { status: string | null; message: string | null; at: string }
 
@@ -50,7 +51,7 @@ const STATUS_STAGE: Record<string, number> = {
   in_progress: 3,
   waiting_info: 3,
   escalated: 3,
-  reopened: 3,
+  reopened: 2,
   citizen_confirmation: 4,
   resolved: 4,
   closed: 5,
@@ -66,6 +67,12 @@ export default function Track() {
   const [result, setResult] = useState<TrackResult | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [searched, setSearched] = useState(false)
+  const [refreshingStatus, setRefreshingStatus] = useState(false)
+  const [canConfirm, setCanConfirm] = useState(false)
+  const [citizenAction, setCitizenAction] = useState<'confirm' | 'reopen' | null>(null)
+  const [reopenReason, setReopenReason] = useState('')
+  const [citizenActionError, setCitizenActionError] = useState<string | null>(null)
+  const { session } = useSession()
 
   // Pre-fill from ?ref= (the wizard's success screen links here)
   useEffect(() => {
@@ -86,6 +93,10 @@ export default function Track() {
     }
     setLoading(true)
     setNotFound(false)
+    setResult(null)
+    setSearched(false)
+    setCanConfirm(false)
+    setCitizenActionError(null)
     try {
       const { data, error } = await supabase.rpc('track_complaint', {
         p_tracking_no: raw,
@@ -99,7 +110,7 @@ export default function Track() {
           return
         }
         if (isNetworkError(error)) {
-          toast.error('Network problem — check your connection and try again.')
+          toast.error('Network problem. Check your connection and try again.')
         } else {
           setNotFound(true)
         }
@@ -115,9 +126,93 @@ export default function Track() {
       setParams({ ref: raw }, { replace: true })
     } catch (err) {
       console.error('track threw:', err)
-      toast.error('Network problem — check your connection and try again.')
+      toast.error('Network problem. Check your connection and try again.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const refreshStatus = useCallback(async (ref: string, quiet = false) => {
+    if (!navigator.onLine) {
+      if (!quiet) toast.error("You're offline. Reconnect and try again.")
+      return
+    }
+    setRefreshingStatus(true)
+    try {
+      const { data, error } = await supabase.rpc('track_complaint', { p_tracking_no: ref })
+      if (error) {
+        if (isAuthError(error)) {
+          if (!quiet) toast.error('Your session has expired. Please sign in again.')
+          await handleAuthExpired()
+          return
+        }
+        if (!quiet) toast.error('Could not refresh this report. Check your connection and try again.')
+        return
+      }
+      if (data) setResult(data as unknown as TrackResult)
+    } catch {
+      if (!quiet) toast.error('Could not refresh this report. Check your connection and try again.')
+    } finally {
+      setRefreshingStatus(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const trackingNo = result?.tracking_no
+    if (!trackingNo) return
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshStatus(trackingNo, true)
+    }, 30_000)
+    return () => window.clearInterval(timer)
+  }, [result?.tracking_no, refreshStatus])
+
+  useEffect(() => {
+    let active = true
+    setCanConfirm(false)
+    setCitizenActionError(null)
+    if (!session?.user.id || !result?.tracking_no || !['citizen_confirmation', 'resolved'].includes(result.status ?? '')) {
+      return () => { active = false }
+    }
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc('fn_can_confirm_report', { p_tracking_no: result.tracking_no })
+        if (active) setCanConfirm(!error && data === true)
+      } catch {
+        if (active) setCanConfirm(false)
+      }
+    })()
+    return () => { active = false }
+  }, [session?.user.id, result?.tracking_no, result?.status])
+
+  async function respondToFix(action: 'confirm' | 'reopen') {
+    if (!result || citizenAction) return
+    if (action === 'reopen' && reopenReason.trim().length < 5) {
+      setCitizenActionError('Please explain what still needs attention (at least 5 characters).')
+      return
+    }
+    setCitizenAction(action)
+    setCitizenActionError(null)
+    try {
+      const { data, error } = action === 'confirm'
+        ? await supabase.rpc('confirm_complaint', { p_tracking_no: result.tracking_no, p_phone: null })
+        : await supabase.rpc('reopen_complaint', {
+            p_tracking_no: result.tracking_no,
+            p_reason: reopenReason.trim(),
+            p_phone: null,
+          })
+      if (error || data !== true) {
+        setCitizenActionError(action === 'confirm'
+          ? 'We could not close this report. Refresh and try again, or contact the handling service.'
+          : 'We could not reopen this report. Refresh and try again, or contact the handling service.')
+        return
+      }
+      setReopenReason('')
+      toast.success(action === 'confirm' ? 'Thank you. This report is now closed.' : 'The report has been reopened.')
+      await refreshStatus(result.tracking_no, true)
+    } catch {
+      setCitizenActionError('We could not update this report. Check your connection and try again.')
+    } finally {
+      setCitizenAction(null)
     }
   }
 
@@ -215,7 +310,7 @@ export default function Track() {
               <div>
                 <p className="font-medium">No report found for that number</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Check for typos — the format is GMC-XXXX-XXXXX, copied from your report
+                  Check for typos. The format is GMC-XXXX-XXXXX, copied from your report
                   confirmation. Or start a{' '}
                   <Link to="/report" className="font-medium text-primary underline">new report</Link>.
                 </p>
@@ -235,12 +330,25 @@ export default function Track() {
                     {result.title ?? 'Report details withheld'}
                   </h2>
                 </div>
-                {badge && <Badge variant={badge.variant}>{badge.label}</Badge>}
+                <div className="flex items-center gap-2">
+                  {badge && <Badge variant={badge.variant}>{badge.label}</Badge>}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void refreshStatus(result.tracking_no)}
+                    disabled={refreshingStatus}
+                    aria-label="Refresh report status"
+                  >
+                    {refreshingStatus ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+                    <span className="sr-only">Refresh status</span>
+                  </Button>
+                </div>
               </div>
               <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                 <div>
                   <dt className="text-muted-foreground">Handled by</dt>
-                  <dd className="font-medium">{result.institution ?? '—'}</dd>
+                  <dd className="font-medium">{result.institution ?? 'Not provided'}</dd>
                 </div>
                 {result.department && (
                   <div>
@@ -263,46 +371,107 @@ export default function Track() {
             </div>
 
             {/* progress steps */}
-            <div>
-              <p className="mb-3 text-sm font-medium">Progress</p>
-              <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <section aria-label="Report progress, six stages">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">Progress</p>
+                <p className="text-xs text-muted-foreground">
+                  {currentIdx >= 0 ? `Step ${currentIdx + 1} of ${STATUS_STEPS.length} · ` : ''}{badge?.label ?? 'Status unavailable'}
+                </p>
+              </div>
+              <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {STATUS_STEPS.map((s, i) => {
                   const done = currentIdx >= i && currentIdx !== -1
                   const isCurrent = currentIdx === i
                   return (
                     <li
                       key={s.key}
+                      aria-current={isCurrent ? 'step' : undefined}
                       className={
-                        'rounded-lg border p-3 text-center text-xs ' +
+                        'flex min-h-[72px] items-center gap-3 rounded-lg border p-3 text-left ' +
                         (isCurrent
-                          ? 'border-primary bg-primary/5'
+                          ? 'border-primary bg-primary/5 text-foreground'
                           : done
-                            ? 'border-primary/40 bg-primary/5'
+                            ? 'border-primary/30 bg-card text-foreground'
                             : 'border-border bg-card text-muted-foreground')
                       }
                     >
                       <span
+                        aria-hidden="true"
                         className={
-                          'mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-full border ' +
+                          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ' +
                           (isCurrent
                             ? 'border-primary bg-primary text-primary-foreground'
                             : done
-                              ? 'border-primary/60 bg-primary/10 text-primary'
+                              ? 'border-primary/40 bg-primary/5 text-primary'
                               : 'border-border')
                         }
                       >
-                        {done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
+                        {done && !isCurrent ? <CheckCircle2 className="h-4 w-4" /> : isCurrent ? <span className="h-2.5 w-2.5 rounded-full bg-current" /> : null}
                       </span>
-                      {s.label}
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium">{s.label}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {isCurrent ? 'Current stage' : done ? 'Completed' : 'Upcoming'}
+                        </span>
+                      </span>
                     </li>
                   )
                 })}
               </ol>
-            </div>
+            </section>
+
+            {['citizen_confirmation', 'resolved'].includes(result.status ?? '') && (
+              <section className="rounded-xl border border-primary/25 bg-primary/5 p-4" aria-labelledby="citizen-response-heading">
+                <h3 id="citizen-response-heading" className="text-sm font-semibold">Your response is needed</h3>
+                {canConfirm ? (
+                  <>
+                    <p className="mt-1 text-sm text-muted-foreground">The service says the fix is complete. Confirm it to close this report, or reopen it if the problem remains.</p>
+                    <Button
+                      type="button"
+                      className="mt-4"
+                      onClick={() => void respondToFix('confirm')}
+                      disabled={citizenAction !== null}
+                    >
+                      {citizenAction === 'confirm' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="mr-2 h-4 w-4" aria-hidden="true" />}
+                      Confirm fix and close report
+                    </Button>
+                    <div className="mt-4 space-y-2">
+                      <Label htmlFor="reopen-reason">If it is not fixed, explain what still needs attention</Label>
+                      <textarea
+                        id="reopen-reason"
+                        value={reopenReason}
+                        onChange={(event) => setReopenReason(event.target.value)}
+                        rows={3}
+                        maxLength={1000}
+                        placeholder="Describe what remains unresolved"
+                        className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void respondToFix('reopen')}
+                        disabled={citizenAction !== null || reopenReason.trim().length < 5}
+                      >
+                        {citizenAction === 'reopen' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <CircleAlert className="mr-2 h-4 w-4" aria-hidden="true" />}
+                        Reopen report
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {session ? 'Only the citizen who filed this report can confirm the fix or reopen it.' : 'Sign in with the citizen account that filed this report to confirm the fix or reopen it.'}
+                  </p>
+                )}
+                {citizenActionError && <p className="mt-3 text-sm text-destructive" role="alert">{citizenActionError}</p>}
+              </section>
+            )}
 
             {/* timeline */}
             <div>
-              <p className="mb-3 text-sm font-medium">Updates</p>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">Updates</p>
+                <p className="text-xs text-muted-foreground">Refreshes automatically while this page is open</p>
+              </div>
               {result.timeline.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center">
                   <Clock className="mx-auto h-5 w-5 text-muted-foreground" aria-hidden="true" />
@@ -320,7 +489,8 @@ export default function Track() {
                         <Clock className="h-4 w-4 text-muted-foreground" />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium">
+                        <p className="text-sm font-medium">{t.status ? statusMeta(t.status).label : 'Update'}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
                           {t.at
                             ? new Date(t.at).toLocaleString('en-GB', {
                                 dateStyle: 'medium',
@@ -328,7 +498,7 @@ export default function Track() {
                               })
                             : ''}
                         </p>
-                        <p className="mt-0.5 text-sm text-muted-foreground">{t.message ?? ''}</p>
+                        {t.message && <p className="mt-1 text-sm text-muted-foreground">{t.message}</p>}
                       </div>
                     </li>
                   ))}

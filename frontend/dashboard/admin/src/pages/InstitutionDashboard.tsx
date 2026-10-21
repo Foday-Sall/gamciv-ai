@@ -112,6 +112,9 @@ function statusBadgeVariant(status: string): "default" | "secondary" | "outline"
   switch (status) {
     case "in_progress":
       return "default"
+    case "resolved":
+    case "citizen_confirmation":
+      return "outline"
     case "waiting_info":
       return "outline"
     case "escalated":
@@ -129,6 +132,11 @@ function formatLabel(value: string): string {
   return value
     .replace(/_/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
+function statusLabel(status: string): string {
+  if (status === "resolved" || status === "citizen_confirmation") return "Fix reported"
+  return formatLabel(status)
 }
 
 function timeAgo(iso: string): string {
@@ -242,24 +250,6 @@ export default function InstitutionDashboard() {
     query.addEventListener("change", update)
     return () => query.removeEventListener("change", update)
   }, [])
-
-  useEffect(() => {
-    const sections = ["overview", "map", "analytics", "complaints"]
-      .map((id) => document.getElementById(id))
-      .filter((section): section is HTMLElement => section !== null)
-    if (!sections.length || !("IntersectionObserver" in window)) return
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
-      const sectionId = visible?.target.id
-      if (sectionId === "overview" || sectionId === "map" || sectionId === "analytics" || sectionId === "complaints") {
-        setActiveSection(sectionId)
-      }
-    }, { rootMargin: "-140px 0px -55% 0px", threshold: [0, 0.15, 0.4] })
-    sections.forEach((section) => observer.observe(section))
-    return () => observer.disconnect()
-  }, [institution, stats])
 
   const loadDashboard = useCallback(async (institutionId: string) => {
     setDataLoading(true)
@@ -437,7 +427,7 @@ export default function InstitutionDashboard() {
     () => (stats?.by_status ?? [])
       .filter((item) => item.count > 0)
       .map((item, index) => ({
-        label: formatLabel(item.status),
+        label: statusLabel(item.status),
         value: item.count,
         fill: CHART_COLORS[index % CHART_COLORS.length],
       })),
@@ -523,11 +513,8 @@ export default function InstitutionDashboard() {
   )
 
   function goToSection(section: "overview" | "map" | "analytics" | "complaints") {
-    document.getElementById(section)?.scrollIntoView({
-      behavior: prefersReducedMotion ? "auto" : "smooth",
-      block: "start",
-    })
     setActiveSection(section)
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" })
   }
 
   if (checkingAccess) {
@@ -573,40 +560,47 @@ export default function InstitutionDashboard() {
   const statCards = [
     {
       label: "Total complaints",
-      value: stats?.total ?? "—",
+      value: stats?.total ?? "-",
       hint: "All reports assigned to your institution",
       icon: Inbox,
       tone: "bg-primary/10 text-primary",
     },
     {
       label: "New today",
-      value: stats?.today ?? "—",
+      value: stats?.today ?? "-",
       hint: "Received since midnight",
       icon: CalendarDays,
       tone: "bg-info/10 text-info",
     },
     {
       label: "Open cases",
-      value: stats?.open ?? "—",
+      value: stats?.open ?? "-",
       hint: "Awaiting resolution or next action",
       icon: FolderOpen,
       tone: "bg-warn/10 text-warn",
     },
     {
       label: "Resolved this week",
-      value: stats?.resolved_week ?? "—",
+      value: stats?.resolved_week ?? "-",
       hint: "Closed in the last 7 days",
       icon: CheckCircle2,
       tone: "bg-ok/10 text-ok",
     },
     {
       label: "Overdue cases",
-      value: stats?.overdue ?? "—",
+      value: stats?.overdue ?? "-",
       hint: "Past the response deadline",
       icon: Clock3,
       tone: "bg-danger/10 text-danger",
     },
   ]
+
+  const viewCopy = {
+    overview: { title: "operations overview", description: "Review workload, new reports, response progress, and overdue cases." },
+    map: { title: "report map", description: "Explore location-tagged cases assigned to your institution." },
+    analytics: { title: "service trends", description: "Understand report volume, status, categories, and submission channels." },
+    complaints: { title: "complaint queue", description: "Search assigned reports and open a case to update its progress." },
+  }[activeSection]
 
   return (
     <>
@@ -634,10 +628,10 @@ export default function InstitutionDashboard() {
             </Badge>
           </div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-            {institution?.name ?? "Institution"} operations
+            {institution?.name ?? "Institution"} {viewCopy.title}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Monitor incoming reports, service demand, and response progress in one place.
+            {viewCopy.description}
           </p>
         </div>
       </motion.header>
@@ -674,9 +668,9 @@ export default function InstitutionDashboard() {
         </Card>
       )}
 
-      <motion.section
+      {activeSection === "overview" && <motion.section
         id="overview"
-        className="scroll-mt-8 grid grid-cols-2 gap-3 max-[359px]:grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+        className="grid grid-cols-2 gap-3 max-[359px]:grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
         aria-label="Complaint operations summary"
         variants={entranceContainer}
         initial={prefersReducedMotion ? false : "hidden"}
@@ -687,9 +681,9 @@ export default function InstitutionDashboard() {
             <StatCard {...item} />
           </motion.div>
         ))}
-      </motion.section>
+      </motion.section>}
 
-      <section id="map" className="mt-6 scroll-mt-24" aria-labelledby="complaint-map-heading">
+      {activeSection === "map" && <section id="map" className="mt-2" aria-labelledby="complaint-map-heading">
         <motion.div
           className="grid gap-4 2xl:grid-cols-[minmax(0,1.6fr)_minmax(290px,0.8fr)]"
           variants={entranceContainer}
@@ -759,8 +753,9 @@ export default function InstitutionDashboard() {
           </motion.div>
         </motion.div>
       </section>
+      }
 
-      <section id="analytics" className="mt-6 scroll-mt-32" aria-label="Complaint analytics and service demand">
+      {activeSection === "analytics" && <section id="analytics" className="mt-2" aria-label="Complaint analytics and service demand">
       <motion.div
         className="grid gap-4 xl:grid-cols-2"
         variants={entranceContainer}
@@ -956,11 +951,11 @@ export default function InstitutionDashboard() {
         </ChartCard>
         </motion.div>
       </motion.div>
-      </section>
+      </section>}
 
-      <motion.section
+      {activeSection === "complaints" && <motion.section
         id="complaints"
-        className="mt-8 scroll-mt-32"
+        className="mt-2"
         aria-labelledby="recent-complaints-heading"
         initial={prefersReducedMotion ? false : "hidden"}
         whileInView="visible"
@@ -973,7 +968,7 @@ export default function InstitutionDashboard() {
             <div className="flex items-center gap-2">
               <Inbox className="h-5 w-5 text-primary" aria-hidden="true" />
               <h2 id="recent-complaints-heading" className="font-display text-lg font-semibold">Complaint queue</h2>
-              <Badge variant="secondary">{stats ? stats.total : "—"} total</Badge>
+              <Badge variant="secondary">{stats ? stats.total : "-"} total</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               Review the latest reports assigned to {institution?.name ?? "your institution"}. The total is supplied by the secured analytics service.
@@ -1028,7 +1023,7 @@ export default function InstitutionDashboard() {
                       {councilAreaLabel(complaint.council_area) || complaint.ward || complaint.region || "Not provided"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={statusBadgeVariant(complaint.status)}>{formatLabel(complaint.status)}</Badge>
+                      <Badge variant={statusBadgeVariant(complaint.status)}>{statusLabel(complaint.status)}</Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={
@@ -1043,7 +1038,7 @@ export default function InstitutionDashboard() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{timeAgo(complaint.created_at)}</TableCell>
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                      {complaint.updated_at ? timeAgo(complaint.updated_at) : "—"}
+                      {complaint.updated_at ? timeAgo(complaint.updated_at) : "-"}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); setSelectedComplaintId(complaint.id) }}>
@@ -1065,7 +1060,7 @@ export default function InstitutionDashboard() {
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Complaint records and analytics are limited to {institution?.name ?? "your institution"}.
       </p>
-      </motion.section>
+      </motion.section>}
       <ComplaintDetailsDialog
         complaintId={selectedComplaintId}
         refreshSignal={complaintRefreshSignal}

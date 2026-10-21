@@ -51,6 +51,9 @@ async function installOfficerMocks(page: Page, failDashboardData = false, initia
   let complaintStatus = initialStatus;
   let resolutionPhotoPath: string | null = null;
   let resolutionNote: string | null = null;
+  let resolutionPhotoParamWasNull = false;
+  let resolutionPhotoUploadAttempted = false;
+  let reopenedReportWasRestarted = false;
 
   await page.route("**/rest/v1/**", async (route) => {
     const request = route.request();
@@ -157,7 +160,8 @@ async function installOfficerMocks(page: Page, failDashboardData = false, initia
 
     if (url.pathname.endsWith("/rpc/fn_officer_set_status")) {
       const body = request.postDataJSON() as { p_status?: string };
-      if (body.p_status === "in_progress" && ["assigned", "waiting_info"].includes(complaintStatus)) {
+      if (body.p_status === "in_progress" && ["assigned", "waiting_info", "reopened"].includes(complaintStatus)) {
+        if (complaintStatus === "reopened") reopenedReportWasRestarted = true;
         complaintStatus = "in_progress";
       }
       await route.fulfill({
@@ -172,6 +176,7 @@ async function installOfficerMocks(page: Page, failDashboardData = false, initia
       const body = request.postDataJSON() as { p_citizen_message?: string; p_resolution_photo_url?: string | null };
       complaintStatus = "citizen_confirmation";
       resolutionNote = body.p_citizen_message ?? null;
+      resolutionPhotoParamWasNull = body.p_resolution_photo_url === null;
       resolutionPhotoPath = body.p_resolution_photo_url ?? null;
       await route.fulfill({
         status: 200,
@@ -237,6 +242,7 @@ async function installOfficerMocks(page: Page, failDashboardData = false, initia
     }
 
     if (method === "POST" && url.pathname.includes(objectMarker)) {
+      resolutionPhotoUploadAttempted = true;
       const objectPath = decodeURIComponent(url.pathname.slice(url.pathname.indexOf(objectMarker) + objectMarker.length));
       resolutionPhotoPath = objectPath;
       await route.fulfill({
@@ -284,6 +290,9 @@ async function installOfficerMocks(page: Page, failDashboardData = false, initia
 
   return {
     complaintQueryWasInstitutionScoped: () => complaintQueryWasInstitutionScoped,
+    resolutionPhotoParamWasNull: () => resolutionPhotoParamWasNull,
+    resolutionPhotoUploadAttempted: () => resolutionPhotoUploadAttempted,
+    reopenedReportWasRestarted: () => reopenedReportWasRestarted,
   };
 }
 
@@ -300,9 +309,19 @@ test("officers see only their institution and are redirected away from admin sec
   await page.goto(new URL("/dash/settings", dashboardOrigin).toString());
 
   await expect(page).toHaveURL(/\/dash\/?$/);
-  await expect(page.getByRole("heading", { name: "NAWEC operations" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "NAWEC operations overview" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Officer navigation" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Complaint queue" })).toBeVisible();
+  await expect(page.locator("#overview")).toBeVisible();
+  await expect(page.locator("#complaints")).toHaveCount(0);
+  const sidebar = page.getByRole("complementary", { name: "Officer workspace sidebar" });
+  await sidebar.getByRole("navigation").getByRole("button", { name: "Complaint map" }).click();
+  await expect(page.getByRole("heading", { name: "NAWEC report map" })).toBeVisible();
+  await expect(page.locator("#map")).toBeVisible();
+  await expect(page.locator("#overview")).toHaveCount(0);
+  await expect(page.locator("#complaints")).toHaveCount(0);
+  await sidebar.getByRole("navigation").getByRole("button", { name: "Complaint queue" }).click();
+  await expect(page.getByRole("heading", { name: "NAWEC complaint queue" })).toBeVisible();
+  await expect(page.locator("#complaints")).toBeVisible();
   await expect(page.locator("#complaints").getByText("Low water pressure", { exact: true })).toBeVisible();
   const queueRow = page.locator("#complaints tbody tr").filter({ hasText: "GC-NAWEC-001" });
   await queueRow.locator("td").nth(1).click();
@@ -315,13 +334,14 @@ test("officers see only their institution and are redirected away from admin sec
   await expect(page.getByText("API keys and secrets", { exact: true })).toHaveCount(0);
   await expect(page.getByText("TELEGRAM_BOT_TOKEN", { exact: true })).toHaveCount(0);
   expect(mocks.complaintQueryWasInstitutionScoped()).toBe(true);
+  await sidebar.getByRole("navigation").getByRole("button", { name: "Service trends" }).click();
+  await expect(page.getByRole("heading", { name: "NAWEC service trends" })).toBeVisible();
   const timeRange = page.getByRole("group", { name: "Trend time range" });
   await timeRange.getByRole("button", { name: "7 days" }).click();
   await expect(timeRange.getByRole("button", { name: "7 days" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("group", { name: "Complaint trend for the last 7 days" })).toBeVisible();
   await page.getByRole("button", { name: "Hide resolved reports" }).click();
   await expect(page.getByRole("button", { name: "Show resolved reports" })).toHaveAttribute("aria-pressed", "false");
-  const sidebar = page.getByRole("complementary", { name: "Officer workspace sidebar" });
   await expect(sidebar).toBeVisible();
   if (process.env.GAMCIV_DASHBOARD_SCREENSHOT === "1") {
     await page.screenshot({ path: "/tmp/gamciv-officer-sidebar-expanded.png" });
@@ -329,16 +349,17 @@ test("officers see only their institution and are redirected away from admin sec
   await sidebar.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect(sidebar.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
   await sidebar.getByRole("navigation", { name: "Officer navigation" }).getByRole("button", { name: "Complaint queue" }).click();
-  await expect(page.getByRole("heading", { name: "Complaint queue" })).toBeInViewport();
+  await expect(page.getByRole("heading", { name: "NAWEC complaint queue" })).toBeVisible();
   await expect(sidebar.getByRole("navigation").getByRole("button", { name: "Complaint queue" })).toHaveAttribute("aria-current", "location");
   if (process.env.GAMCIV_DASHBOARD_SCREENSHOT === "1") {
     await page.screenshot({ path: "/tmp/gamciv-institution-dashboard.png", fullPage: true });
   }
 });
 
-test("officers can accept a received report, start work, and report a resolution with photo evidence", async ({ page }) => {
-  await installOfficerMocks(page, false, "received");
+test("officers can accept a report, start work, and report a fix without uploading a photo", async ({ page }) => {
+  const mocks = await installOfficerMocks(page, false, "received");
   await page.goto(new URL("/dash/", dashboardOrigin).toString());
+  await page.getByRole("navigation", { name: "Officer navigation" }).getByRole("button", { name: "Complaint queue" }).click();
 
   const queueRow = page.locator("#complaints tbody tr").filter({ hasText: "GC-NAWEC-001" });
   await queueRow.locator("td").nth(1).click();
@@ -348,20 +369,35 @@ test("officers can accept a received report, start work, and report a resolution
 
   await details.getByRole("button", { name: "Accept report" }).click();
   await expect(details.getByRole("button", { name: "Mark in progress" })).toBeVisible();
-  await expect(details.getByLabel("Resolution photo (optional)")).toBeVisible();
+  await expect(details.getByLabel("Resolution photo (optional)")).toHaveCount(0);
+  await expect(details.getByRole("button", { name: "Send fix for confirmation" })).toHaveCount(0);
 
   await details.getByRole("button", { name: "Mark in progress" }).click();
   await expect(details.getByText("In Progress", { exact: true })).toBeVisible();
+  await expect(details.getByRole("button", { name: "Send fix for confirmation" })).toBeVisible();
   await details.getByLabel("Resolution note").fill("Power restored and service checked.");
-  await details.getByLabel("Resolution photo (optional)").setInputFiles({
-    name: "restored-service.png",
-    mimeType: "image/png",
-    buffer: Buffer.from("test-image"),
-  });
-  await details.getByRole("button", { name: "Mark resolved" }).click();
+  await details.getByRole("button", { name: "Send fix for confirmation" }).click();
 
-  await expect(details.getByText("Citizen Confirmation", { exact: true })).toBeVisible();
-  await expect(details.getByRole("img", { name: "Resolution evidence for report GC-NAWEC-001" })).toBeVisible();
+  await expect(details.getByText("Fix reported", { exact: true })).toBeVisible();
+  await expect(details.getByText("No resolution photo has been added.", { exact: true })).toBeVisible();
+  expect(mocks.resolutionPhotoParamWasNull()).toBe(true);
+  expect(mocks.resolutionPhotoUploadAttempted()).toBe(false);
+});
+
+test("officers can restart work after a citizen reopens a report", async ({ page }) => {
+  const mocks = await installOfficerMocks(page, false, "reopened");
+  await page.goto(new URL("/dash/", dashboardOrigin).toString());
+  await page.getByRole("navigation", { name: "Officer navigation" }).getByRole("button", { name: "Complaint queue" }).click();
+
+  const queueRow = page.locator("#complaints tbody tr").filter({ hasText: "GC-NAWEC-001" });
+  await queueRow.locator("td").nth(1).click();
+  const details = page.getByRole("dialog", { name: "Report details" });
+  await expect(details.getByRole("button", { name: "Mark in progress" })).toBeVisible();
+  await expect(details.getByRole("button", { name: "Accept report" })).toHaveCount(0);
+  await details.getByRole("button", { name: "Mark in progress" }).click();
+
+  await expect(details.getByText("In Progress", { exact: true })).toBeVisible();
+  expect(mocks.reopenedReportWasRestarted()).toBe(true);
 });
 
 test("a lost connection produces a clear retry message instead of an unhandled error", async ({ page }) => {
@@ -382,7 +418,7 @@ test("the institution dashboard remains usable at a mobile width", async ({ page
   await installOfficerMocks(page);
   await page.goto(new URL("/dash/", dashboardOrigin).toString());
 
-  await expect(page.getByRole("heading", { name: "NAWEC operations" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "NAWEC operations overview" })).toBeVisible();
   const menuButton = page.getByRole("button", { name: "Open navigation" });
   await expect(menuButton).toBeVisible();
   await menuButton.click();
@@ -400,8 +436,9 @@ test("the institution dashboard remains usable at a mobile width", async ({ page
   await expect(mobileNav.getByRole("button", { name: "Dashboard" })).toBeVisible();
   await mobileNav.getByRole("button", { name: "Service trends" }).click();
   await expect(drawer).toHaveCount(0);
-  await expect(page.getByRole("group", { name: "Complaint trend for the last 14 days" })).toBeInViewport();
-  await expect(page.getByRole("heading", { name: "Complaint queue" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "NAWEC service trends" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Complaint trend for the last 14 days" })).toBeVisible();
+  await expect(page.locator("#complaints")).toHaveCount(0);
   const timeRange = page.getByRole("group", { name: "Trend time range" });
   await expect(timeRange.getByRole("button", { name: "7 days" })).toBeVisible();
   await timeRange.getByRole("button", { name: "7 days" }).click();

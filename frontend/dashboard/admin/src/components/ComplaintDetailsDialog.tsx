@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { AlertCircle, CheckCircle2, ImagePlus, Loader2, Mail, MapPin, Phone, Play, RefreshCw, ShieldCheck, Upload } from "lucide-react"
+import { AlertCircle, CheckCircle2, Loader2, Mail, MapPin, Phone, Play, RefreshCw, ShieldCheck } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/secretsClient"
 
 type ComplaintDetail = {
@@ -39,6 +38,12 @@ type DetailResult = { ok: boolean; error?: string; complaint?: ComplaintDetail }
 
 function formatLabel(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function formatStatus(value: string): string {
+  if (value === "citizen_confirmation" || value === "resolved") return "Fix reported"
+  if (value === "waiting_info") return "Waiting for information"
+  return formatLabel(value)
 }
 
 function formatDate(value: string): string {
@@ -75,7 +80,6 @@ export function ComplaintDetailsDialog({
   const [citizenPhoto, setCitizenPhoto] = useState<string | null>(null)
   const [resolutionPhoto, setResolutionPhoto] = useState<string | null>(null)
   const [resolutionNote, setResolutionNote] = useState("")
-  const [proofFile, setProofFile] = useState<File | null>(null)
   const [savingResolution, setSavingResolution] = useState(false)
   const [savingStatus, setSavingStatus] = useState(false)
   const [statusError, setStatusError] = useState<string | null>(null)
@@ -89,7 +93,6 @@ export function ComplaintDetailsDialog({
       setCitizenPhoto(null)
       setResolutionPhoto(null)
       setResolutionNote("")
-      setProofFile(null)
       setStatusError(null)
       setActionError(null)
       setActionSuccess(null)
@@ -157,8 +160,8 @@ export function ComplaintDetailsDialog({
     ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`
     : null
   const canAcceptReport = Boolean(complaint && ["submitted", "received", "escalated"].includes(complaint.status))
-  const canStartWork = Boolean(complaint && ["assigned", "waiting_info"].includes(complaint.status))
-  const canReportResolution = Boolean(complaint && ["assigned", "in_progress", "waiting_info"].includes(complaint.status))
+  const canStartWork = Boolean(complaint && ["assigned", "waiting_info", "reopened"].includes(complaint.status))
+  const canReportResolution = complaint?.status === "in_progress"
 
   async function updateWorkStatus(action: "accept" | "in_progress") {
     if (!complaint || savingStatus || savingResolution) return
@@ -197,56 +200,27 @@ export function ComplaintDetailsDialog({
       setActionError("Add a short resolution note of at least 5 characters.")
       return
     }
-    if (proofFile && (!['image/jpeg', 'image/png', 'image/webp'].includes(proofFile.type) || proofFile.size > 10 * 1024 * 1024)) {
-      setActionError("Choose a JPG, PNG, or WebP image up to 10 MB.")
-      return
-    }
-
     setSavingResolution(true)
     setActionError(null)
     setActionSuccess(null)
-    let uploadedPath: string | null = null
     try {
-      if (proofFile) {
-        const ext = proofFile.type === "image/png" ? "png" : proofFile.type === "image/webp" ? "webp" : "jpg"
-        const objectId = typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-        uploadedPath = `${complaint.id}/resolution-${objectId}.${ext}`
-        const { error: uploadError } = await supabase.storage
-          .from("complaint-photos")
-          .upload(uploadedPath, proofFile, {
-            cacheControl: "3600",
-            contentType: proofFile.type,
-            upsert: false,
-          })
-        if (uploadError) throw new Error(uploadError.message)
-      }
-
       const { data, error: rpcError } = await supabase.rpc("fn_officer_report_resolution", {
         p_complaint_id: complaint.id,
         p_citizen_message: note,
-        p_resolution_photo_url: uploadedPath,
+        p_resolution_photo_url: null,
       })
-      if (rpcError) throw new Error(rpcError.message)
+      if (rpcError) throw rpcError
       if (data !== true) {
-        if (uploadedPath) await supabase.storage.from("complaint-photos").remove([uploadedPath])
-        setActionError("This report could not be marked resolved. Refresh the report and check that it is still assigned to your institution.")
+        setActionError("This fix could not be reported. Refresh the report and confirm it is still assigned to your institution.")
         return
       }
 
-      setActionSuccess("Fix reported. The citizen can confirm the resolution or reopen the report.")
+      setActionSuccess("Fix reported to the citizen. They can confirm it or reopen the report.")
       setResolutionNote("")
-      setProofFile(null)
       onStatusUpdated?.()
       setRetry((value) => value + 1)
-    } catch (actionFailure) {
-      if (uploadedPath) {
-        await supabase.storage.from("complaint-photos").remove([uploadedPath]).catch(() => undefined)
-      }
-      setActionError(actionFailure instanceof Error
-        ? `The resolution could not be saved: ${actionFailure.message}`
-        : "The resolution could not be saved. Check your connection and retry.")
+    } catch {
+      setActionError("The fix update could not be saved. Check your connection and try again.")
     } finally {
       setSavingResolution(false)
     }
@@ -263,7 +237,7 @@ export function ComplaintDetailsDialog({
                 {complaint?.tracking_no ?? "Secure report record"}
               </DialogDescription>
             </div>
-            {complaint ? <Badge variant="secondary">{formatLabel(complaint.status)}</Badge> : null}
+            {complaint ? <Badge variant="secondary">{formatStatus(complaint.status)}</Badge> : null}
           </div>
         </DialogHeader>
 
@@ -369,9 +343,9 @@ export function ComplaintDetailsDialog({
               <section className="rounded-xl border border-primary/30 bg-primary/5 p-4" aria-labelledby="resolve-report-heading">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" />
-                  <h3 id="resolve-report-heading" className="text-sm font-semibold">Mark resolved</h3>
+                  <h3 id="resolve-report-heading" className="text-sm font-semibold">Report a fix</h3>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">Report the fix to the citizen. They can confirm it or reopen the report.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Send the repair note to the citizen. They can confirm the fix or reopen the report.</p>
                 <label htmlFor="resolution-note" className="mt-4 block text-sm font-medium">Resolution note</label>
                 <textarea
                   id="resolution-note"
@@ -382,27 +356,11 @@ export function ComplaintDetailsDialog({
                   placeholder="Describe the repair or action taken"
                   className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
-                <label htmlFor="resolution-proof" className="mt-4 block text-sm font-medium">Resolution photo (optional)</label>
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <Input
-                    id="resolution-proof"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="max-w-sm"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] ?? null
-                      setProofFile(file)
-                      setActionError(null)
-                    }}
-                  />
-                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><ImagePlus className="h-4 w-4" aria-hidden="true" /> JPG, PNG, or WebP, up to 10 MB</span>
-                </div>
-                {proofFile ? <p className="mt-2 text-xs text-muted-foreground">Selected: {proofFile.name}</p> : null}
                 {actionError ? <p className="mt-3 text-sm text-destructive" role="alert">{actionError}</p> : null}
                 {actionSuccess ? <p className="mt-3 text-sm text-primary" role="status">{actionSuccess}</p> : null}
                 <Button type="button" className="mt-4" onClick={() => void reportResolution()} disabled={savingResolution || resolutionNote.trim().length < 5}>
-                  {savingResolution ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Upload className="mr-2 h-4 w-4" aria-hidden="true" />}
-                  {savingResolution ? "Saving resolution" : "Mark resolved"}
+                  {savingResolution ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="mr-2 h-4 w-4" aria-hidden="true" />}
+                  {savingResolution ? "Sending fix update" : "Send fix for confirmation"}
                 </Button>
               </section>
             ) : null}

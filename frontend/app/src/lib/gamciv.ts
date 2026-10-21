@@ -73,7 +73,7 @@ export async function fetchInstitutions(): Promise<InstitutionInfo[]> {
     console.error('institutions fetch failed:', error?.message)
     // Don't fail silently: with fallback ids ('') submissions would break, so
     // tell the person the service list couldn't be loaded from the server.
-    toast.warning("Couldn't load the service list — showing offline placeholders. Check your connection.")
+    toast.warning("Couldn't load the service list. Showing offline placeholders. Check your connection.")
     return [
       ...INSTITUTION_ORDER.map((code) => ({
         id: '',
@@ -117,7 +117,7 @@ export type CategoryInfo = {
   deadline_hours: number | null
 }
 
-/** Static icon name (lucide) keyed by slug — the categories table has no icon column. */
+/** Static icon name (lucide) keyed by slug. The categories table has no icon column. */
 export const CATEGORY_ICONS: Record<string, string> = {
   water_supply: 'Droplets',
   electricity: 'Zap',
@@ -166,7 +166,7 @@ export const COUNCIL_AREAS: CouncilArea[] = [
   { value: 'basse', label: 'Basse Area Council (Upper River Region)', group: 'area', region: 'Upper River Region' },
 ]
 
-/** Municipal bbox from the institutions table — used to clamp/snap GPS to a council area. */
+/** Municipal bbox from the institutions table, used to clamp or snap GPS to a council area. */
 export const MUNICIPAL_BBOXES: Record<string, [number, number, number, number]> = {
   kanifing: [13.48, -16.76, 13.56, -16.62],
 }
@@ -201,7 +201,7 @@ export function statusMeta(status: string | null | undefined): {
 } {
   switch (status) {
     case 'resolved':
-      return { label: 'Resolved', variant: 'default' }
+      return { label: 'Fix reported', variant: 'outline' }
     case 'closed':
       return { label: 'Closed', variant: 'secondary' }
     case 'rejected':
@@ -211,7 +211,7 @@ export function statusMeta(status: string | null | undefined): {
     case 'waiting_info':
       return { label: 'Waiting for info', variant: 'outline' }
     case 'citizen_confirmation':
-      return { label: 'Fix reported · confirm', variant: 'outline' }
+      return { label: 'Fix reported', variant: 'outline' }
     case 'forwarded':
       return { label: 'Forwarded', variant: 'secondary' }
     case 'assigned':
@@ -223,7 +223,8 @@ export function statusMeta(status: string | null | undefined): {
     case 'received':
       return { label: 'Received', variant: 'secondary' }
     case 'submitted':
-    default:
       return { label: 'Submitted', variant: 'secondary' }
+    default:
+      return { label: 'Status unavailable', variant: 'outline' }
   }
 }
