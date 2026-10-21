@@ -95,7 +95,7 @@ jobs:
           test -n "$VPS_HOST"
 
           # Keep the existing idempotent database migration deployment behavior.
-          for migration in backend/db/0015_institution_dashboard.sql backend/db/0016_dispatch.sql backend/db/0017_profile_avatar.sql backend/db/0017_whatsapp_numbers.sql backend/db/0019_citizen_evidence.sql; do
+          for migration in backend/db/0015_institution_dashboard.sql backend/db/0016_dispatch.sql backend/db/0017_profile_avatar.sql backend/db/0017_whatsapp_numbers.sql backend/db/0019_citizen_evidence.sql backend/db/0020_storage_objects_authenticated_insert.sql; do
             if [ -f "$migration" ]; then
               name=$(basename "$migration")
               scp_cmd "$migration" "$VPS_HOST:/tmp/$name"
