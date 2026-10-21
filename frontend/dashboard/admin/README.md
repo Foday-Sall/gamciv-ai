@@ -1,6 +1,6 @@
-# GamCiv Admin
+# GamFix Admin
 
-Single-administrator console for the GamCiv platform. Institutions never get an
+Single-administrator console for the GamFix platform. Institutions never get an
 admin panel: the administrator issues their accounts here and manages what each
 account can see and do.
 

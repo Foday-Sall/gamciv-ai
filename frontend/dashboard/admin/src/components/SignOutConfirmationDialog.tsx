@@ -29,7 +29,7 @@ export function SignOutConfirmationDialog({
           <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-xl bg-muted text-foreground">
             <LogOut className="h-5 w-5" aria-hidden="true" />
           </div>
-          <DialogTitle className="font-display text-xl">Sign out of GamCiv?</DialogTitle>
+          <DialogTitle className="font-display text-xl">Sign out of GamFix?</DialogTitle>
           <DialogDescription>
             You will leave your institution workspace and return to the shared sign-in page. Any unsaved work may be lost.
           </DialogDescription>

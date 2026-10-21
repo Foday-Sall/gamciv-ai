@@ -1,5 +1,5 @@
-# GamCiv landing page
+# GamFix landing page
 
-GamCiv landing page. React + Vite + Tailwind.
+GamFix landing page. React + Vite + Tailwind.
 
 Run: `npm install && npm run dev`

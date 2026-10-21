@@ -13,6 +13,8 @@ import {
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import gamfixLogo from "@/assets/gamfix-logo.png"
+import gamfixIcon from "@/assets/gamfix-icon.png"
 
 export type NavKey =
   | "overview"
@@ -73,12 +75,10 @@ export function Sidebar({
         )}
       >
         <div className="flex h-16 items-center gap-3 border-b border-border px-4">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary font-display text-sm font-bold text-primary-foreground">
-            A
-          </div>
+          {collapsed ? <img src={gamfixIcon} alt="GamFix" className="h-9 w-9 shrink-0 object-contain" draggable={false} /> : null}
           {collapsed ? null : (
             <div className="min-w-0 flex-1">
-              <p className="truncate font-display text-sm font-semibold">GamCiv Admin</p>
+              <img src={gamfixLogo} alt="GamFix" className="h-7 w-auto max-w-[150px] object-contain object-left" draggable={false} />
               <p className="truncate text-xs text-muted-foreground">Administrator console</p>
             </div>
           )}

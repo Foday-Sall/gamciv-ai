@@ -45,7 +45,7 @@ export default function Profile() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
-    document.title = 'Your profile · GamCiv'
+    document.title = 'Your profile · GamFix'
   }, [])
 
   // Load the profile row once the session is known.
@@ -300,7 +300,7 @@ export default function Profile() {
 
             <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
               <p className="text-sm text-muted-foreground">
-                GamCiv web app · version {APP_VERSION}
+                GamFix web app · version {APP_VERSION}
               </p>
               <Badge variant="outline" className="border-border text-muted-foreground">
                 Beta

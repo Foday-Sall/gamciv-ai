@@ -40,7 +40,7 @@ import { Bar, BarChart, CartesianGrid, Area, AreaChart, XAxis, YAxis, Pie, PieCh
 import { useSession } from '@/hooks/useSession'
 import { supabase, getProfile } from '@/lib/supabase'
 import { statusMeta } from '@/lib/gamciv'
-import GamCivMark from '@/components/GamCivMark'
+import GamFixMark from '@/components/GamFixMark'
 import type { Complaint } from '@/lib/types'
 import {
   getInstituteUser,
@@ -381,7 +381,7 @@ export default function InstituteDashboard() {
                 className="h-12 w-12 rounded-lg bg-white object-contain p-1 ring-1 ring-border"
               />
             ) : (
-              <GamCivMark />
+              <GamFixMark />
             )}
             <div>
               <h1 className="font-display text-2xl font-bold tracking-tight">{staff.institutionName}</h1>
@@ -492,7 +492,7 @@ export default function InstituteDashboard() {
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">Intake channels</CardTitle>
-            <CardDescription>How citizens reached GamCiv</CardDescription>
+            <CardDescription>How citizens reached GamFix</CardDescription>
           </CardHeader>
           <CardContent className="flex items-center justify-center">
             <ChartContainer config={chartConfig} className="h-56 w-full max-w-md">
@@ -585,7 +585,7 @@ export default function InstituteDashboard() {
                           />
                         ) : (
                           <span className="mt-0.5 shrink-0" aria-hidden="true">
-                            <GamCivMark />
+                            <GamFixMark />
                           </span>
                         )}
                         <div className="min-w-0">

@@ -1,5 +1,5 @@
 
-import GamCivMark from "@/components/GamCivMark"
+import gamfixLogo from "@/assets/gamfix-logo.png"
 
 type PageKind = "privacy" | "terms"
 
@@ -8,7 +8,7 @@ const content = {
     title: "Privacy Policy",
     updated: "Last updated: 18 October 2026",
     intro:
-      "GamCiv is a public complaints service for The Gambia, operated by PocketSoftware. This policy explains what information we collect when you submit a report, why we collect it, and what happens to it. The short version: we collect what is needed to handle your report, nothing more, and we do not sell your data.",
+      "GamFix is a public complaints service for The Gambia, operated by PocketSoftware. This policy explains what information we collect when you submit a report, why we collect it, and what happens to it. The short version: we collect what is needed to handle your report, nothing more, and we do not sell your data.",
     sections: [
       {
         h: "What we collect",
@@ -42,12 +42,12 @@ const content = {
     title: "Terms of Service",
     updated: "Last updated: 18 October 2026",
     intro:
-      "These terms govern your use of GamCiv, a public complaints service for The Gambia operated by PocketSoftware. By sending a report to the GamCiv WhatsApp line or contacting us, you agree to these terms.",
+      "These terms govern your use of GamFix, a public complaints service for The Gambia operated by PocketSoftware. By sending a report to the GamFix WhatsApp line or contacting us, you agree to these terms.",
     sections: [
       {
-        h: "What GamCiv does",
+        h: "What GamFix does",
         p: [
-          "GamCiv receives reports about public problems, routes them to the institution responsible, and tracks them to resolution. It is a communication and triage service: we pass your report on and keep you informed. We do not have the power to compel any institution to act, and a routed report is not a guarantee of action or a legal filing.",
+          "GamFix receives reports about public problems, routes them to the institution responsible, and tracks them to resolution. It is a communication and triage service: we pass your report on and keep you informed. We do not have the power to compel any institution to act, and a routed report is not a guarantee of action or a legal filing.",
         ],
       },
       {
@@ -79,9 +79,8 @@ export default function Legal({ page }: { page: PageKind }) {
     <div className="min-h-screen bg-background font-sans text-foreground antialiased">
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 md:px-8">
-          <a href="/" className="flex items-center gap-2.5 text-lg font-bold tracking-tight font-display">
-            <GamCivMark />
-            GamCiv
+          <a href="/" className="flex items-center" aria-label="GamFix home">
+            <img src={gamfixLogo} alt="GamFix" className="h-9 w-auto max-w-[150px] object-contain" draggable={false} />
           </a>
           <nav className="hidden items-center gap-8 text-sm font-medium text-muted-foreground md:flex" aria-label="Main">
             <a href="/#how" className="transition-colors hover:text-foreground">How it works</a>
@@ -112,9 +111,8 @@ export default function Legal({ page }: { page: PageKind }) {
       <footer className="mt-12 border-t border-border bg-card">
         <div className="mx-auto max-w-6xl px-5 py-10 md:px-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <a href="/" className="flex items-center gap-2 font-bold tracking-tight font-display">
-              <GamCivMark />
-              GamCiv
+            <a href="/" className="flex items-center" aria-label="GamFix home">
+              <img src={gamfixLogo} alt="GamFix" className="h-9 w-auto max-w-[150px] object-contain" draggable={false} />
             </a>
             <nav className="flex flex-wrap gap-x-7 gap-y-2 text-sm text-muted-foreground" aria-label="Footer">
               <a href="/" className="hover:text-foreground">Home</a>
@@ -126,7 +124,7 @@ export default function Legal({ page }: { page: PageKind }) {
               </a>
             </nav>
           </div>
-          <p className="mt-8 text-[13px] text-muted-foreground">&copy; 2026 GamCiv. All rights reserved.</p>
+          <p className="mt-8 text-[13px] text-muted-foreground">&copy; 2026 GamFix. All rights reserved.</p>
         </div>
       </footer>
     </div>

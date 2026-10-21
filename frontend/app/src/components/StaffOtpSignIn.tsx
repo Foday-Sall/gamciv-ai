@@ -65,7 +65,7 @@ export function StaffOtpSignIn({ email }: { email: string }) {
       if (role === 'citizen') {
         navigate('/home', { replace: true })
       } else if (!role) {
-        setError('This account is not enabled for GamCiv access. Contact the platform administrator.')
+        setError('This account is not enabled for GamFix access. Contact the platform administrator.')
       }
     } catch (err) {
       setError(friendlyAuthError(err))

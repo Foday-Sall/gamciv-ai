@@ -232,7 +232,7 @@ export default function InstitutionDashboard() {
   const [signOutError, setSignOutError] = useState<string | null>(null)
 
   useEffect(() => {
-    document.title = "Institution dashboard - GamCiv"
+    document.title = "Institution dashboard - GamFix"
   }, [])
 
   useEffect(() => {
@@ -1019,7 +1019,7 @@ export default function InstitutionDashboard() {
               </TableHeader>
               <TableBody>
                 {visibleRows.map((complaint) => (
-                  <TableRow key={complaint.id} className="transition-colors hover:bg-muted/35">
+                  <TableRow key={complaint.id} onClick={() => setSelectedComplaintId(complaint.id)} className="cursor-pointer transition-colors hover:bg-muted/35">
                     <TableCell className="whitespace-nowrap font-mono text-xs">{complaint.tracking_no}</TableCell>
                     <TableCell className="max-w-[360px]">
                       <span className="block truncate font-medium">{complaint.title}</span>
@@ -1046,7 +1046,7 @@ export default function InstitutionDashboard() {
                       {complaint.updated_at ? timeAgo(complaint.updated_at) : "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" onClick={() => setSelectedComplaintId(complaint.id)}>
+                      <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); setSelectedComplaintId(complaint.id) }}>
                         <Eye className="mr-2 h-3.5 w-3.5" aria-hidden="true" /> View report
                       </Button>
                     </TableCell>

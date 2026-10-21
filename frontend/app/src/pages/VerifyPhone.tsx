@@ -87,7 +87,7 @@ export default function VerifyPhone() {
   const [checkingAccount, setCheckingAccount] = useState(true)
 
   useEffect(() => {
-    document.title = 'Verify phone · GamCiv'
+    document.title = 'Verify phone · GamFix'
   }, [])
 
   useEffect(() => {

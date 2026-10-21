@@ -7,7 +7,7 @@ const TG_NOTIFS = [
     icon: Send,
     color: "#229ED9",
     bg: "rgba(34,158,217,0.14)",
-    title: "GamCiv Bot",
+    title: "GamFix Bot",
     time: "09:41",
     body: "Report GMC-2026-02418 received: routed to KMC. Send the reference any time to track it.",
   },
@@ -84,7 +84,7 @@ export default function TelegramScreen({ static: isStatic }: PhoneScreenProps) {
             transition={{ delay: skip ? 0 : 0.35 + TG_NOTIFS.length * 0.45, duration: 0.3, ease: EASE }}
             className="mx-auto mt-0.5 rounded-full bg-[#229ED9] px-2 py-0.5 text-[6.5px] font-medium text-white"
           >
-            From @GamCivBot
+            From the official channel
           </motion.div>
         </div>
       </div>

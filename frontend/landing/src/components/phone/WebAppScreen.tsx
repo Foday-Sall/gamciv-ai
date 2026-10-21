@@ -22,7 +22,7 @@ export default function WebAppScreen({ static: isStatic }: PhoneScreenProps) {
         <ChevronLeft className="h-2.5 w-2.5 text-neutral-400" />
         <Lock className="h-2 w-2 text-neutral-400" />
         <span className="flex-1 truncate rounded-full bg-neutral-100 px-2 py-0.5 text-[7px] text-neutral-500">
-          gamciv.pocketsoftware.dev
+          GamFix
         </span>
         <RotateCw className="h-2.5 w-2.5 text-neutral-400" />
       </div>

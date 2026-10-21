@@ -38,7 +38,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import GamCivMark from '@/components/GamCivMark'
+import GamFixMark from '@/components/GamFixMark'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -65,7 +65,7 @@ import {
   type InstitutionInfo,
 } from '@/lib/gamciv'
 
-const SENSITIVE_NOTE = 'These reports are reviewed by the GamCiv Central Desk first.'
+const SENSITIVE_NOTE = 'These reports are reviewed by the GamFix Central Desk first.'
 
 const CATEGORY_ICON_COMPONENTS: Record<string, LucideIcon> = {
   water_supply: Droplets,
@@ -123,7 +123,7 @@ export default function Report() {
   prevStepRef.current = step
 
   useEffect(() => {
-    document.title = 'New report · GamCiv'
+    document.title = 'New report · GamFix'
   }, [])
   const [institutions, setInstitutions] = useState<InstitutionInfo[] | null>(null)
   const [categories, setCategories] = useState<CategoryInfo[] | null>(null)
@@ -138,6 +138,7 @@ export default function Report() {
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<SubmitResult | null>(null)
   const [photoUploadFailed, setPhotoUploadFailed] = useState(false)
+  const [photoUploadFailureCode, setPhotoUploadFailureCode] = useState<string | null>(null)
   const [retryingPhotoUpload, setRetryingPhotoUpload] = useState(false)
   const [gpsState, setGpsState] = useState<'idle' | 'locating' | 'ok' | 'error'>('idle')
   const [copied, setCopied] = useState(false)
@@ -156,6 +157,7 @@ export default function Report() {
     setPhotoFile(null)
     setPhotoPreview(null)
     setPhotoUploadFailed(false)
+    setPhotoUploadFailureCode(null)
     setRetryingPhotoUpload(false)
     setLocation(EMPTY_LOCATION)
     setResult(null)
@@ -296,12 +298,16 @@ export default function Report() {
     }
     setPhotoFile(file)
     setPhotoPreview(URL.createObjectURL(file))
+    setPhotoUploadFailed(false)
+    setPhotoUploadFailureCode(null)
   }
 
   function clearPhoto() {
     if (photoPreview) URL.revokeObjectURL(photoPreview)
     setPhotoFile(null)
     setPhotoPreview(null)
+    setPhotoUploadFailed(false)
+    setPhotoUploadFailureCode(null)
   }
 
   async function doGps() {
@@ -405,10 +411,11 @@ export default function Report() {
 
       const res = data as SubmitResult
       if (photoFile) {
-        const attached = await uploadAndAttachPhoto(res.complaint_id, photoFile)
-        setPhotoUploadFailed(!attached)
-        if (!attached) {
-          toast.warning('Report filed, but its photo was not attached. Retry the photo upload on the confirmation screen.')
+        const failureCode = await uploadAndAttachPhoto(res.complaint_id, photoFile)
+        setPhotoUploadFailed(!!failureCode)
+        setPhotoUploadFailureCode(failureCode)
+        if (failureCode) {
+          toast.warning(`Report filed, but its photo was not attached. Error reference: ${failureCode}. Retry the photo upload on the confirmation screen.`)
         }
       }
 
@@ -427,41 +434,37 @@ export default function Report() {
     }
   }
 
-  async function uploadPhoto(complaintId: string, file: File): Promise<string | null> {
-    const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
-    const objectId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const path = `${complaintId}/${objectId}.${ext}`
-    const { error } = await supabase.storage
-      .from('complaint-photos')
-      .upload(path, file, { cacheControl: '3600', contentType: file.type, upsert: false })
-    if (error) {
-      console.error('photo upload failed:', error.message)
-      return null
-    }
-    return path
-  }
-
-  async function uploadAndAttachPhoto(complaintId: string, file: File): Promise<boolean> {
+  async function uploadAndAttachPhoto(complaintId: string, file: File): Promise<string | null> {
+    const body = new FormData()
+    body.set('complaint_id', complaintId)
+    body.set('photo', file, file.name || 'report-photo')
+    const normalizeCode = (value: string | null | undefined) =>
+      value?.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 48) || 'upload_failed'
     try {
-      const path = await uploadPhoto(complaintId, file)
-      if (!path) return false
-
-      // Citizens cannot update complaint rows (RLS), so the path is attached
-      // through a SECURITY DEFINER RPC that checks ownership.
-      const { data: attached, error: attachError } = await supabase.rpc('attach_photo', {
-        p_complaint_id: complaintId,
-        p_path: path,
-      })
-      if (attachError || attached !== true) {
-        console.error('attach_photo failed:', attachError?.message ?? 'ownership check failed')
-        return false
+      const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>(
+        'citizen-photo-upload',
+        { body },
+      )
+      if (error) {
+        let code: string | null = null
+        if (error.context instanceof Response) {
+          const payload = await error.context.clone().json().catch(() => null) as { error?: unknown } | null
+          if (payload && typeof payload.error === 'string') code = payload.error
+        }
+        const failureCode = normalizeCode(code ?? error.name)
+        console.error('citizen photo upload failed:', { name: error.name, code: failureCode })
+        return failureCode
       }
-      return true
-    } catch {
-      console.error('photo upload or attachment failed')
-      return false
+      if (data?.ok !== true) {
+        const failureCode = normalizeCode(data?.error ?? 'invalid_response')
+        console.error('citizen photo upload failed:', failureCode)
+        return failureCode
+      }
+      return null
+    } catch (error) {
+      const failureCode = normalizeCode(error instanceof Error ? error.name : 'request_failed')
+      console.error('citizen photo upload request failed:', failureCode)
+      return failureCode
     }
   }
 
@@ -484,10 +487,11 @@ export default function Report() {
 
     setRetryingPhotoUpload(true)
     try {
-      const attached = await uploadAndAttachPhoto(result.complaint_id, photoFile)
-      setPhotoUploadFailed(!attached)
-      if (attached) toast.success('Photo attached to your report.')
-      else toast.error('Photo upload failed. Keep your tracking number and try again.')
+      const failureCode = await uploadAndAttachPhoto(result.complaint_id, photoFile)
+      setPhotoUploadFailed(!!failureCode)
+      setPhotoUploadFailureCode(failureCode)
+      if (!failureCode) toast.success('Photo attached to your report.')
+      else toast.error(`Photo upload failed (${failureCode}). Keep your tracking number and try again.`)
     } finally {
       setRetryingPhotoUpload(false)
     }
@@ -579,7 +583,7 @@ export default function Report() {
                           className="h-12 w-12 rounded-md border border-border/60 object-contain"
                         />
                       ) : (
-                        <GamCivMark className="h-12 w-12" />
+                        <GamFixMark className="h-12 w-12" />
                       )}
                       <span className="min-w-0">
                         <span className="block font-semibold leading-tight">{inst.name}</span>
@@ -866,7 +870,7 @@ export default function Report() {
                   {institution?.logo ? (
                     <img src={institution.logo} alt="" className="h-10 w-10 rounded-md object-contain" />
                   ) : (
-                    <GamCivMark className="h-10 w-10" />
+                    <GamFixMark className="h-10 w-10" />
                   )}
                   <div>
                     <p className="text-sm text-muted-foreground">This will be sent to</p>
@@ -949,6 +953,11 @@ export default function Report() {
                 <p className="text-sm font-medium text-destructive">
                   Your report was filed, but its photo could not be attached. The dashboard has no photo to show yet.
                 </p>
+                {photoUploadFailureCode && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Upload reference: <code>{photoUploadFailureCode}</code>
+                  </p>
+                )}
                 <Button
                   type="button"
                   variant="outline"
@@ -1003,7 +1012,7 @@ export default function Report() {
                     institution.logo ? (
                       <img src={institution.logo} alt="" className="h-8 w-8 rounded object-contain" />
                     ) : (
-                      <GamCivMark className="h-8 w-8" />
+                      <GamFixMark className="h-8 w-8" />
                     )
                   ) : (
                     <span className="flex h-8 w-8 items-center justify-center rounded bg-secondary">

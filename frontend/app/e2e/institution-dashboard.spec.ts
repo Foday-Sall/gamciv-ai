@@ -142,6 +142,38 @@ async function installOfficerMocks(page: Page, failDashboardData = false) {
       return;
     }
 
+    if (url.pathname.endsWith("/rpc/fn_officer_complaint_detail")) {
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders, "content-type": "application/json" },
+        body: JSON.stringify({
+          ok: true,
+          complaint: {
+            id: "00000000-0000-4000-8000-000000000333",
+            tracking_no: "GC-NAWEC-001",
+            title: "Low water pressure",
+            description: "Water pressure is low across the neighbourhood.",
+            status: "in_progress",
+            urgency: "normal",
+            category: "Water supply",
+            lat: 13.45,
+            lng: -16.67,
+            region: "Kanifing",
+            council_area: "Kanifing Municipal Council",
+            ward: "Kanifing",
+            created_at: "2026-10-19T10:00:00.000Z",
+            updated_at: "2026-10-19T11:00:00.000Z",
+            is_anonymous: true,
+            photo_url: null,
+            resolution_photo_url: null,
+            resolution_note: null,
+            contact: null,
+          },
+        }),
+      });
+      return;
+    }
+
     await route.fulfill({
       status: 404,
       headers: { ...corsHeaders, "content-type": "application/json" },
@@ -203,6 +235,14 @@ test("officers see only their institution and are redirected away from admin sec
   await expect(page.getByRole("navigation", { name: "Officer navigation" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Complaint queue" })).toBeVisible();
   await expect(page.locator("#complaints").getByText("Low water pressure", { exact: true })).toBeVisible();
+  const queueRow = page.locator("#complaints tbody tr").filter({ hasText: "GC-NAWEC-001" });
+  await queueRow.locator("td").nth(1).click();
+  const details = page.getByRole("dialog", { name: "Report details" });
+  await expect(details).toBeVisible();
+  await expect(details.getByRole("heading", { name: "Low water pressure" })).toBeVisible();
+  await expect(details).toContainText("GC-NAWEC-001");
+  await details.getByRole("button", { name: "Close details" }).click();
+  await expect(details).toHaveCount(0);
   await expect(page.getByText("API keys and secrets", { exact: true })).toHaveCount(0);
   await expect(page.getByText("TELEGRAM_BOT_TOKEN", { exact: true })).toHaveCount(0);
   expect(mocks.complaintQueryWasInstitutionScoped()).toBe(true);

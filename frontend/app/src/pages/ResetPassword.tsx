@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { CheckCircle2, KeyRound, Loader2, MailCheck } from 'lucide-react'
 import { toast } from 'sonner'
-import GamCivMark from '@/components/GamCivMark'
+import gamfixLogo from '@/assets/gamfix-logo.png'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -175,14 +175,14 @@ export default function ResetPassword() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
       <Card className="w-full max-w-md shadow-sm">
         <CardHeader className="items-center text-center">
-          <GamCivMark className="h-12 w-12 rounded-xl shadow-sm" />
+          <img src={gamfixLogo} alt="GamFix" className="h-10 w-auto max-w-[180px] object-contain" draggable={false} />
           <h1 className="font-display text-2xl font-bold tracking-tight">
             {step === 'code' ? 'Check your email' : 'Choose a new password'}
           </h1>
           <CardDescription className="max-w-sm">
             {step === 'code'
               ? `Enter the one-time code sent to ${email || 'your email address'}.`
-              : 'Your code is confirmed. Choose a new password for your GamCiv account.'}
+              : 'Your code is confirmed. Choose a new password for your GamFix account.'}
           </CardDescription>
         </CardHeader>
         <CardContent>

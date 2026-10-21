@@ -29,7 +29,7 @@ export default function VerifyEmail() {
   const [resent, setResent] = useState(false)
 
   useEffect(() => {
-    document.title = 'Verify email · GamCiv'
+    document.title = 'Verify email · GamFix'
   }, [])
 
   // Pre-fill: first from the signup/login hand-off (location state), then

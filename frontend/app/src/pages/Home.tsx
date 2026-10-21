@@ -2,7 +2,7 @@
  * /home — signed-in landing. Per redesign spec §3a/§3a':
  *  - Greeting + one primary CTA card (Report a problem), quick-track row.
  *  - "Your reports" list (recent, from RLS query) with skeletons.
- *  - Desktop (≥1024px): 8/4 grid — left content, right "How GamCiv works"
+ *  - Desktop (≥1024px): 8/4 grid — left content, right "How GamFix works"
  *    and Emergencies cards. No header here: AppShell owns navigation.
  */
 import { useEffect, useState } from 'react'
@@ -40,7 +40,7 @@ export default function Home() {
   const [recent, setRecent] = useState<RecentRow[] | null>(null)
 
   useEffect(() => {
-    document.title = 'Home · GamCiv'
+    document.title = 'Home · GamFix'
   }, [])
 
   useEffect(() => {
@@ -188,7 +188,7 @@ export default function Home() {
         <aside className="min-[1024px]:col-span-4 space-y-4">
           <div className="rounded-xl border border-border bg-card p-5">
             <h2 className="font-display text-base font-bold tracking-tight">
-              How GamCiv works
+              How GamFix works
             </h2>
             <ol className="mt-4 space-y-4">
               {[

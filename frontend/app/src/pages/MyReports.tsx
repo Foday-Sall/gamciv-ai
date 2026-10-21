@@ -50,7 +50,7 @@ export default function MyReports() {
   const [localRefs, setLocalRefs] = useState<string[]>([])
 
   useEffect(() => {
-    document.title = 'My reports · GamCiv'
+    document.title = 'My reports · GamFix'
   }, [])
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { CheckCircle2, ExternalLink, Mail, MapPin, MessageSquare, Route } from "lucide-react"
-import GamCivMark from "@/components/GamCivMark"
 import GambiaFlag from "@/components/GambiaFlag"
+import gamfixLogo from "@/assets/gamfix-logo.png"
 
 /* Footer: three-column grid on the brand's hairline discipline.
    LEFT: brand block stacked on a flex column: logo + wordmark, the service
@@ -23,9 +23,8 @@ export default function Footer() {
         <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_0.9fr] md:gap-8">
           {/* Brand block: stacked composition, the four verbs as a kicker row */}
           <div className="flex max-w-sm flex-col gap-3.5">
-            <a href="/" className="flex items-center gap-2 text-lg font-bold tracking-tight font-display">
-              <GamCivMark />
-              GamCiv
+            <a href="/" className="flex items-center" aria-label="GamFix home">
+              <img src={gamfixLogo} alt="GamFix" className="h-9 w-auto max-w-[150px] object-contain" draggable={false} />
             </a>
             <p className="text-sm leading-relaxed text-muted-foreground">
               A public complaints service for The Gambia.
@@ -85,7 +84,7 @@ export default function Footer() {
 
         {/* Bottom row: copyright and national sign-off */}
         <div className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6 text-[13px] text-muted-foreground">
-          <span>&copy; 2026 GamCiv. All rights reserved.</span>
+          <span>&copy; 2026 GamFix. All rights reserved.</span>
           <span className="inline-flex items-center gap-2">
             <GambiaFlag className="h-3 w-auto rounded-[1px]" aria-hidden="true" />
             Made for The Gambia

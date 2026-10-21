@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <title>GamCiv — Report public problems in The Gambia</title>
+  <title>GamFix — Report public problems in The Gambia</title>
   <!-- Sand background -->
   <rect width="1200" height="630" fill="#F9F4E8"/>
   <!-- Deep green institutional band -->
@@ -15,7 +15,7 @@
   </g>
 
   <!-- Wordmark -->
-  <text x="310" y="325" font-family="Lexend, 'Source Sans 3', Arial, Helvetica, sans-serif" font-size="112" font-weight="700" fill="#2A1B10" letter-spacing="-3">GamCiv</text>
+  <text x="310" y="325" font-family="Lexend, 'Source Sans 3', Arial, Helvetica, sans-serif" font-size="112" font-weight="700" fill="#2A1B10" letter-spacing="-3">GamFix</text>
 
   <!-- Tagline -->
   <text x="314" y="398" font-family="'Source Sans 3', Arial, Helvetica, sans-serif" font-size="46" fill="#675A48">Report public problems in The Gambia</text>
@@ -27,5 +27,5 @@
   </g>
 
   <!-- Domain -->
-  <text x="120" y="580" font-family="'Source Sans 3', Arial, Helvetica, sans-serif" font-size="26" fill="#A89478">gamciv.pocketsoftware.dev</text>
+  <text x="120" y="580" font-family="'Source Sans 3', Arial, Helvetica, sans-serif" font-size="26" fill="#A89478">Public service for The Gambia</text>
 </svg>

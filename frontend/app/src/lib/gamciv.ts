@@ -52,7 +52,7 @@ const FALLBACK_NAMES: Record<InstitutionCode, string> = {
   NRA: 'National Roads Authority',
   NEA: 'National Environment Agency',
   POLICE: 'Gambia Police Force',
-  CENTRAL: 'GamCiv Central Desk',
+  CENTRAL: 'GamFix Central Desk',
 }
 
 /** Fallback order used when the institutions table is unreachable. */

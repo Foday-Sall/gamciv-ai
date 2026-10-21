@@ -30,7 +30,7 @@ function SharedLoginRedirect() {
   useEffect(() => {
     window.location.replace("/app/login")
   }, [])
-  return <main className="flex min-h-screen items-center justify-center text-sm text-muted-foreground" role="status">Opening GamCiv sign in…</main>
+  return <main className="flex min-h-screen items-center justify-center text-sm text-muted-foreground" role="status">Opening GamFix sign in…</main>
 }
 
 function DashboardHome() {

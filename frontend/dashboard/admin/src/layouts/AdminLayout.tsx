@@ -62,7 +62,7 @@ export function AdminLayout() {
       <main className="flex min-h-screen items-center justify-center bg-background px-5 text-foreground">
         <section className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-sm">
           <h1 className="font-display text-xl font-semibold">Dashboard access unavailable</h1>
-          <p className="mt-2 text-sm text-muted-foreground">We couldn’t verify your session with GamCiv. Check your connection and try again.</p>
+          <p className="mt-2 text-sm text-muted-foreground">We couldn’t verify your session with GamFix. Check your connection and try again.</p>
           <Button className="mt-5" onClick={() => setRetry((value) => value + 1)}>
             <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" /> Try again
           </Button>

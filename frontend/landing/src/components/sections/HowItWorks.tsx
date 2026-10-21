@@ -69,7 +69,7 @@ const steps = [
   },
   {
     n: "02",
-    t: "GamCiv routes it",
+    t: "GamFix routes it",
     d: "The system reads your report, understands what it is, and routes it straight to the office that owns the problem: KMC, NAWEC, NRA, NEA or the police desk. No wrong door, no runaround.",
   },
   {
@@ -138,7 +138,7 @@ export default function HowItWorks() {
           <div id="track" className="mb-6 scroll-mt-24 rounded-none border-2 border-border bg-card">
             <div className="flex items-center gap-2.5 border-b border-border px-5 py-3.5">
               <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-              <span className="text-sm font-semibold">GamCiv Reports</span>
+              <span className="text-sm font-semibold">GamFix Reports</span>
               <span className="ml-auto text-xs text-muted-foreground">WhatsApp</span>
             </div>
             <div className="px-5 py-5">

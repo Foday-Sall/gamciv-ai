@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { supabase, routeByRole } from '@/lib/supabase'
 import { friendlyAuthError } from '@/lib/authErrors'
-import GamCivMark from '@/components/GamCivMark'
+import gamfixLogo from '@/assets/gamfix-logo.png'
 import { StaffOtpSignIn } from '@/components/StaffOtpSignIn'
 import { Button } from '@/components/ui/button'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
@@ -168,7 +168,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
       if (role === 'citizen') {
         navigate('/home', { replace: true })
       } else if (!role) {
-        setError('We could not confirm that this account is enabled for GamCiv. Contact the platform administrator.')
+        setError('We could not confirm that this account is enabled for GamFix. Contact the platform administrator.')
       }
     }).catch(() => {
       if (!cancelled) setError('We could not verify your account. Check your connection and try again.')
@@ -208,7 +208,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
         }
         if (data.session) {
           toast.success('Account created', {
-            description: `Welcome to GamCiv, ${name.trim().split(' ')[0]}.`,
+            description: `Welcome to GamFix, ${name.trim().split(' ')[0]}.`,
           })
           // New signups are citizens by default (the signup trigger sets the
           // role), but respect the actual profile role just in case.
@@ -252,7 +252,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
           ? await routeByRole()
           : null
         if (routed === null) {
-          setError('This account is not enabled for GamCiv access. Contact the platform administrator.')
+          setError('This account is not enabled for GamFix access. Contact the platform administrator.')
           return
         }
         if (routed === 'citizen') {
@@ -300,14 +300,14 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-5 py-10">
         <section className="w-full rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
           <div className="flex flex-col items-center text-center">
-            <GamCivMark className="h-14 w-14 rounded-2xl shadow-sm" />
+            <img src={gamfixLogo} alt="GamFix" className="h-10 w-auto max-w-[180px] object-contain" draggable={false} />
             <h1 className="mt-5 font-display text-2xl font-bold tracking-tight">
-              {isSignup ? 'Create your GamCiv account' : 'Welcome back'}
+              {isSignup ? 'Create your GamFix account' : 'Welcome back'}
             </h1>
             <p className="mt-2 max-w-sm text-muted-foreground">
               {isSignup
                 ? 'Create a free account to report public problems and follow them until they are fixed.'
-                : 'Sign in as a citizen or institution staff member to open your GamCiv workspace.'}
+                : 'Sign in as a citizen or institution staff member to open your GamFix workspace.'}
             </p>
           </div>
 
@@ -398,7 +398,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
           </Button>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            {isSignup ? 'Already have an account? ' : 'New to GamCiv? '}
+            {isSignup ? 'Already have an account? ' : 'New to GamFix? '}
             <button
               type="button"
               onClick={() => switchMode(isSignup ? 'signin' : 'signup')}

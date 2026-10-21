@@ -58,7 +58,7 @@ const STATUS_STAGE: Record<string, number> = {
 
 export default function Track() {
   useEffect(() => {
-    document.title = 'Track a report · GamCiv'
+    document.title = 'Track a report · GamFix'
   }, [])
   const [params, setParams] = useSearchParams()
   const [value, setValue] = useState('')

@@ -36,8 +36,9 @@ import { SignOutDialog } from '@/components/ConfirmDialogs'
 import PageTransition from '@/components/PageTransition'
 import { useSession, useDisplayName } from '@/hooks/useSession'
 import { supabase, getProfile, isGoogleAuthUser, STAFF_DASHBOARD_URL } from '@/lib/supabase'
-import GamCivMark from '@/components/GamCivMark'
+import GamFixMark from '@/components/GamFixMark'
 import { toast } from 'sonner'
+import gamfixLogo from '@/assets/gamfix-logo.png'
 
 const NAV_LINKS = [
   { to: '/home', label: 'Home' },
@@ -193,7 +194,7 @@ export default function AppShell() {
           {isFocusMode ? (
             <>
               <div className="flex items-center gap-2.5 text-lg font-bold tracking-tight font-display">
-                <GamCivMark />
+                <GamFixMark />
                 New report
               </div>
               <button
@@ -209,10 +210,10 @@ export default function AppShell() {
             <>
               <Link
                 to="/home"
-                className="flex items-center gap-2.5 text-lg font-bold tracking-tight font-display"
+                className="flex items-center"
+                aria-label="GamFix home"
               >
-                <GamCivMark />
-                <span className={isFocusMode ? '' : ''}>GamCiv</span>
+                <img src={gamfixLogo} alt="GamFix" className="h-8 w-auto max-w-[160px] object-contain" draggable={false} />
               </Link>
 
               {/* Desktop nav links */}
@@ -307,7 +308,7 @@ export default function AppShell() {
       {!isFocusMode && (
         <footer className="hairline-t pb-20 min-[1024px]:pb-0">
           <div className="mx-auto max-w-[1200px] px-5 py-6 text-sm text-muted-foreground md:px-6">
-            GamCiv — report public problems in The Gambia.
+            GamFix — report public problems in The Gambia.
           </div>
         </footer>
       )}

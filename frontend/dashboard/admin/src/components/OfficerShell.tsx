@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import gamfixLogo from "@/assets/gamfix-logo.png"
 
 type OfficerSection = "overview" | "map" | "analytics" | "complaints"
 
@@ -146,7 +147,7 @@ export function OfficerShell({
           </span>
         )}
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">GamCiv operations</p>
+          <img src={gamfixLogo} alt="GamFix" className="h-6 w-auto max-w-[150px] object-contain object-left" draggable={false} />
           <p className="truncate text-xs text-muted-foreground">{institutionName}</p>
         </div>
       </div>
@@ -166,9 +167,9 @@ export function OfficerShell({
         <div className={cn("flex h-16 shrink-0 items-center border-b border-border", collapsed ? "justify-center px-3" : "px-5")}>
           {collapsed ? (
             institutionLogo ? (
-              <img src={institutionLogo} alt={`${institutionName} logo`} className="h-9 w-9 rounded-lg bg-white object-contain p-1" title={`GamCiv · ${institutionName}`} />
+              <img src={institutionLogo} alt={`${institutionName} logo`} className="h-9 w-9 rounded-lg bg-white object-contain p-1" title={`GamFix · ${institutionName}`} />
             ) : (
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground" title={`GamCiv · ${institutionName}`}>
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground" title={`GamFix · ${institutionName}`}>
                 <Building2 className="h-[18px] w-[18px]" aria-hidden="true" />
               </span>
             )
@@ -215,7 +216,7 @@ export function OfficerShell({
           </Button>
           <div className="min-w-0 flex-1 md:hidden">
             {institutionLogo ? <img src={institutionLogo} alt="" className="mr-2 inline-block h-7 w-7 rounded bg-white object-contain p-0.5 align-middle" /> : null}
-            <p className="truncate text-sm font-semibold">GamCiv operations</p>
+            <img src={gamfixLogo} alt="GamFix" className="h-5 w-auto max-w-[132px] object-contain object-left" draggable={false} />
             <p className="truncate text-xs text-muted-foreground">{institutionName}</p>
           </div>
           <div className="hidden min-w-0 flex-1 md:block">

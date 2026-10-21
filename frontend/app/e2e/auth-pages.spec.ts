@@ -63,7 +63,7 @@ for (const viewport of [
       await expectAuthPageToRender(
         page,
         "/app/signup",
-        "Create your GamCiv account",
+        "Create your GamFix account",
         ["Full name", "Email", "Password"],
         "Sign up",
       );

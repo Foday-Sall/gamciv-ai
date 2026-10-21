@@ -9,7 +9,7 @@ const path = window.location.pathname
 const root = createRoot(document.getElementById("root")!)
 if (path === "/privacy" || path === "/terms") {
   const title = path === "/privacy" ? "Privacy Policy" : "Terms of Service"
-  document.title = `${title} - GamCiv`
+  document.title = `${title} - GamFix`
   root.render(
     <StrictMode>
       <Legal page={path === "/privacy" ? "privacy" : "terms"} />

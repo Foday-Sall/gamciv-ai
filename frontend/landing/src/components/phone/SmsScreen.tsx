@@ -5,7 +5,7 @@ import { EASE, SCREEN_VARIANTS, SCREEN_TRANSITION, type PhoneScreenProps } from 
 const SMS_SCRIPT = [
   {
     out: false,
-    text: "GAMCIV: Report GMC-2026-02418 received. Routed to KMC Works. Reply STATUS for updates.",
+    text: "GAMFIX: Report GMC-2026-02418 received. Routed to KMC Works. Reply STATUS for updates.",
     time: "09:41",
   },
   { out: true, text: "STATUS GMC-2026-02418", time: "10:03" },
@@ -41,7 +41,7 @@ export default function SmsScreen({ static: isStatic }: PhoneScreenProps) {
           <MessageSquare className="h-3 w-3 text-white" strokeWidth={2.2} />
         </div>
         <div className="min-w-0">
-          <p className="text-[9px] font-semibold leading-none text-neutral-900">GamCiv</p>
+          <p className="text-[9px] font-semibold leading-none text-neutral-900">GamFix</p>
           <p className="mt-0.5 text-[7px] leading-none text-neutral-500">+220 241 1818</p>
         </div>
       </div>

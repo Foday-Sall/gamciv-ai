@@ -37,7 +37,7 @@ export default function WhatsAppScreen({ static: isStatic }: PhoneScreenProps) {
           <MessageCircle className="h-3.5 w-3.5 text-white" strokeWidth={2.2} />
         </div>
         <div className="min-w-0">
-          <p className="text-[9px] font-semibold leading-none text-white">GamCiv Reports</p>
+          <p className="text-[9px] font-semibold leading-none text-white">GamFix Reports</p>
           <p className="mt-0.5 text-[7px] leading-none text-white/60">online</p>
         </div>
         <span className="ml-auto rounded-full bg-white/15 px-1.5 py-0.5 text-[6.5px] font-medium text-white/80">
