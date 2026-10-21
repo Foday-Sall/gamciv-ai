@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { AlertCircle, CheckCircle2, ImagePlus, Loader2, Mail, MapPin, Phone, RefreshCw, ShieldCheck, Upload } from "lucide-react"
+import { AlertCircle, CheckCircle2, ImagePlus, Loader2, Mail, MapPin, Phone, Play, RefreshCw, ShieldCheck, Upload } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -77,6 +77,8 @@ export function ComplaintDetailsDialog({
   const [resolutionNote, setResolutionNote] = useState("")
   const [proofFile, setProofFile] = useState<File | null>(null)
   const [savingResolution, setSavingResolution] = useState(false)
+  const [savingStatus, setSavingStatus] = useState(false)
+  const [statusError, setStatusError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
 
@@ -88,6 +90,7 @@ export function ComplaintDetailsDialog({
       setResolutionPhoto(null)
       setResolutionNote("")
       setProofFile(null)
+      setStatusError(null)
       setActionError(null)
       setActionSuccess(null)
       return
@@ -153,10 +156,42 @@ export function ComplaintDetailsDialog({
   const mapUrl = lat !== null && lng !== null && Number.isFinite(lat) && Number.isFinite(lng)
     ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`
     : null
+  const canAcceptReport = Boolean(complaint && ["submitted", "received", "escalated"].includes(complaint.status))
+  const canStartWork = Boolean(complaint && ["assigned", "waiting_info"].includes(complaint.status))
   const canReportResolution = Boolean(complaint && ["assigned", "in_progress", "waiting_info"].includes(complaint.status))
 
+  async function updateWorkStatus(action: "accept" | "in_progress") {
+    if (!complaint || savingStatus || savingResolution) return
+    setSavingStatus(true)
+    setStatusError(null)
+    setActionError(null)
+    setActionSuccess(null)
+    try {
+      const { data, error: rpcError } = action === "accept"
+        ? await supabase.rpc("fn_officer_accept", { p_complaint_id: complaint.id })
+        : await supabase.rpc("fn_officer_set_status", {
+            p_complaint_id: complaint.id,
+            p_status: "in_progress",
+            p_citizen_message: "An officer has started work on your report.",
+          })
+      if (rpcError) throw rpcError
+      if (data !== true) {
+        setStatusError(action === "accept"
+          ? "This report could not be accepted. Refresh it and confirm it is still available to your institution."
+          : "This report could not be marked in progress. Refresh it and confirm it is still assigned to your institution.")
+        return
+      }
+      onStatusUpdated?.()
+      setRetry((value) => value + 1)
+    } catch {
+      setStatusError("The report status could not be updated. Check your connection and try again.")
+    } finally {
+      setSavingStatus(false)
+    }
+  }
+
   async function reportResolution() {
-    if (!complaint || savingResolution) return
+    if (!complaint || savingResolution || savingStatus) return
     const note = resolutionNote.trim()
     if (note.length < 5) {
       setActionError("Add a short resolution note of at least 5 characters.")
@@ -303,6 +338,32 @@ export function ComplaintDetailsDialog({
                 </div>
               </div>
             </section>
+
+            {canAcceptReport || canStartWork ? (
+              <section className="rounded-xl border border-primary/30 bg-primary/5 p-4" aria-labelledby="manage-report-heading">
+                <h3 id="manage-report-heading" className="text-sm font-semibold">Update report status</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {canAcceptReport
+                    ? "Accept this report to assign it to your institution and unlock staff resolution actions."
+                    : "Start work to update the citizen and track active repairs."}
+                </p>
+                {statusError ? <p className="mt-3 text-sm text-destructive" role="alert">{statusError}</p> : null}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {canAcceptReport ? (
+                    <Button type="button" onClick={() => void updateWorkStatus("accept")} disabled={savingStatus || savingResolution}>
+                      {savingStatus ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <ShieldCheck className="mr-2 h-4 w-4" aria-hidden="true" />}
+                      {savingStatus ? "Accepting report" : "Accept report"}
+                    </Button>
+                  ) : null}
+                  {canStartWork ? (
+                    <Button type="button" onClick={() => void updateWorkStatus("in_progress")} disabled={savingStatus || savingResolution}>
+                      {savingStatus ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Play className="mr-2 h-4 w-4" aria-hidden="true" />}
+                      {savingStatus ? "Updating status" : "Mark in progress"}
+                    </Button>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
 
             {canReportResolution ? (
               <section className="rounded-xl border border-primary/30 bg-primary/5 p-4" aria-labelledby="resolve-report-heading">

@@ -46,8 +46,11 @@ const corsHeaders = {
   "access-control-max-age": "86400",
 };
 
-async function installOfficerMocks(page: Page, failDashboardData = false) {
+async function installOfficerMocks(page: Page, failDashboardData = false, initialStatus = "in_progress") {
   let complaintQueryWasInstitutionScoped = false;
+  let complaintStatus = initialStatus;
+  let resolutionPhotoPath: string | null = null;
+  let resolutionNote: string | null = null;
 
   await page.route("**/rest/v1/**", async (route) => {
     const request = route.request();
@@ -110,7 +113,7 @@ async function installOfficerMocks(page: Page, failDashboardData = false) {
             institution_id: institutionId,
             tracking_no: "GC-NAWEC-001",
             title: "Low water pressure",
-            status: "in_progress",
+            status: complaintStatus,
             urgency: "normal",
             created_at: "2026-10-19T10:00:00.000Z",
             updated_at: "2026-10-19T11:00:00.000Z",
@@ -142,6 +145,42 @@ async function installOfficerMocks(page: Page, failDashboardData = false) {
       return;
     }
 
+    if (url.pathname.endsWith("/rpc/fn_officer_accept")) {
+      complaintStatus = "assigned";
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders, "content-type": "application/json" },
+        body: "true",
+      });
+      return;
+    }
+
+    if (url.pathname.endsWith("/rpc/fn_officer_set_status")) {
+      const body = request.postDataJSON() as { p_status?: string };
+      if (body.p_status === "in_progress" && ["assigned", "waiting_info"].includes(complaintStatus)) {
+        complaintStatus = "in_progress";
+      }
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders, "content-type": "application/json" },
+        body: JSON.stringify(complaintStatus === "in_progress"),
+      });
+      return;
+    }
+
+    if (url.pathname.endsWith("/rpc/fn_officer_report_resolution")) {
+      const body = request.postDataJSON() as { p_citizen_message?: string; p_resolution_photo_url?: string | null };
+      complaintStatus = "citizen_confirmation";
+      resolutionNote = body.p_citizen_message ?? null;
+      resolutionPhotoPath = body.p_resolution_photo_url ?? null;
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders, "content-type": "application/json" },
+        body: "true",
+      });
+      return;
+    }
+
     if (url.pathname.endsWith("/rpc/fn_officer_complaint_detail")) {
       await route.fulfill({
         status: 200,
@@ -153,7 +192,7 @@ async function installOfficerMocks(page: Page, failDashboardData = false) {
             tracking_no: "GC-NAWEC-001",
             title: "Low water pressure",
             description: "Water pressure is low across the neighbourhood.",
-            status: "in_progress",
+            status: complaintStatus,
             urgency: "normal",
             category: "Water supply",
             lat: 13.45,
@@ -165,8 +204,8 @@ async function installOfficerMocks(page: Page, failDashboardData = false) {
             updated_at: "2026-10-19T11:00:00.000Z",
             is_anonymous: true,
             photo_url: null,
-            resolution_photo_url: null,
-            resolution_note: null,
+            resolution_photo_url: resolutionPhotoPath,
+            resolution_note: resolutionNote,
             contact: null,
           },
         }),
@@ -179,6 +218,36 @@ async function installOfficerMocks(page: Page, failDashboardData = false) {
       headers: { ...corsHeaders, "content-type": "application/json" },
       body: JSON.stringify({ message: "Unexpected test request" }),
     });
+  });
+
+  await page.route("**/storage/v1/object/**", async (route) => {
+    const url = new URL(route.request().url());
+    const method = route.request().method();
+    const signMarker = "/object/sign/complaint-photos/";
+    const objectMarker = "/object/complaint-photos/";
+
+    if (url.pathname.includes(signMarker)) {
+      const objectPath = decodeURIComponent(url.pathname.slice(url.pathname.indexOf(signMarker) + signMarker.length));
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders, "content-type": "application/json" },
+        body: JSON.stringify({ signedURL: `/storage/v1/object/sign/complaint-photos/${objectPath}?token=test-token` }),
+      });
+      return;
+    }
+
+    if (method === "POST" && url.pathname.includes(objectMarker)) {
+      const objectPath = decodeURIComponent(url.pathname.slice(url.pathname.indexOf(objectMarker) + objectMarker.length));
+      resolutionPhotoPath = objectPath;
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders, "content-type": "application/json" },
+        body: JSON.stringify({ Key: objectPath }),
+      });
+      return;
+    }
+
+    await route.fulfill({ status: 200, headers: corsHeaders, body: "" });
   });
 
   await page.routeWebSocket(/\/realtime\/v1\/websocket/, (socket) => {
@@ -265,6 +334,34 @@ test("officers see only their institution and are redirected away from admin sec
   if (process.env.GAMCIV_DASHBOARD_SCREENSHOT === "1") {
     await page.screenshot({ path: "/tmp/gamciv-institution-dashboard.png", fullPage: true });
   }
+});
+
+test("officers can accept a received report, start work, and report a resolution with photo evidence", async ({ page }) => {
+  await installOfficerMocks(page, false, "received");
+  await page.goto(new URL("/dash/", dashboardOrigin).toString());
+
+  const queueRow = page.locator("#complaints tbody tr").filter({ hasText: "GC-NAWEC-001" });
+  await queueRow.locator("td").nth(1).click();
+  const details = page.getByRole("dialog", { name: "Report details" });
+  await expect(details.getByRole("button", { name: "Accept report" })).toBeVisible();
+  await expect(details.getByLabel("Resolution photo (optional)")).toHaveCount(0);
+
+  await details.getByRole("button", { name: "Accept report" }).click();
+  await expect(details.getByRole("button", { name: "Mark in progress" })).toBeVisible();
+  await expect(details.getByLabel("Resolution photo (optional)")).toBeVisible();
+
+  await details.getByRole("button", { name: "Mark in progress" }).click();
+  await expect(details.getByText("In Progress", { exact: true })).toBeVisible();
+  await details.getByLabel("Resolution note").fill("Power restored and service checked.");
+  await details.getByLabel("Resolution photo (optional)").setInputFiles({
+    name: "restored-service.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("test-image"),
+  });
+  await details.getByRole("button", { name: "Mark resolved" }).click();
+
+  await expect(details.getByText("Citizen Confirmation", { exact: true })).toBeVisible();
+  await expect(details.getByRole("img", { name: "Resolution evidence for report GC-NAWEC-001" })).toBeVisible();
 });
 
 test("a lost connection produces a clear retry message instead of an unhandled error", async ({ page }) => {
