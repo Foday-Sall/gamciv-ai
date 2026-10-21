@@ -91,7 +91,10 @@ Deno.test("FetchGowaClient sendMessage succeeds after a timed-out first attempt"
     ((_url, init) => {
       calls++;
       // prove a fresh timeout signal is attached on each attempt
-      assertEquals(init?.signal instanceof AbortSignal, true);
+      assertEquals(
+        init !== undefined && "signal" in init && init.signal instanceof AbortSignal,
+        true,
+      );
       if (calls === 1) return Promise.reject(abort);
       return Promise.resolve(
         new Response(JSON.stringify({ message_id: "M1", status: "sent" }), {

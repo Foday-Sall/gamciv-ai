@@ -68,8 +68,8 @@ Deno.test("first-time Google user: exactly one welcome email is sent and logged"
   const baseFetch = deps.fetchImpl;
   deps.fetchImpl = (url, init) => {
     const u = typeof url === "string" ? url : String((url as URL).href);
-    if (u.includes("email_log") && init?.method === "POST") {
-      logWrites.push(JSON.parse(String(init.body)));
+    if (u.includes("email_log") && init && "method" in init && init.method === "POST") {
+      logWrites.push(JSON.parse(String("body" in init ? init.body : undefined)));
       return Promise.resolve(new Response(null, { status: 201 }));
     }
     return baseFetch(url, init);
@@ -152,8 +152,8 @@ Deno.test("failed Resend send is logged as failed and still answers 200", async 
   const baseFetch = deps.fetchImpl;
   deps.fetchImpl = (url, init) => {
     const u = typeof url === "string" ? url : String((url as URL).href);
-    if (u.includes("email_log") && init?.method === "POST") {
-      logWrites.push(JSON.parse(String(init.body)));
+    if (u.includes("email_log") && init && "method" in init && init.method === "POST") {
+      logWrites.push(JSON.parse(String("body" in init ? init.body : undefined)));
       return Promise.resolve(new Response(null, { status: 201 }));
     }
     return baseFetch(url, init);

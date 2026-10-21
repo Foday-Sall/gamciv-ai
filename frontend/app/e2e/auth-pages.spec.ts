@@ -57,6 +57,9 @@ for (const viewport of [
         ["Email", "Password"],
         "Sign in",
       );
+      await expect(
+        page.getByRole("button", { name: "Sign in with an email code", exact: true }),
+      ).toHaveCount(0);
     });
 
     test("signup page renders with its assets", async ({ page }) => {

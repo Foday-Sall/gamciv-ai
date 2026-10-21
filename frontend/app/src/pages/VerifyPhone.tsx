@@ -145,6 +145,7 @@ export default function VerifyPhone() {
   async function sendCode(e?: React.FormEvent) {
     e?.preventDefault()
     setError(null)
+    setToken("")
     const normalized = normalizePhone(phone)
     if (normalized.length < 9 || normalized.length > 15) {
       setError(FULL_NUMBER_HINT)
@@ -245,7 +246,7 @@ export default function VerifyPhone() {
           <CardDescription>
             {stage === 'phone'
               ? 'We will send a one-time code to this number on WhatsApp to confirm it is yours.'
-              : `Enter the ${OTP_LENGTH}-digit code sent to your WhatsApp.`}
+              : `Enter the latest ${OTP_LENGTH}-digit code sent to your WhatsApp. Requesting a new code invalidates the previous one.`}
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -3,10 +3,7 @@
  * verification can never mark the user's profile as phone verified.
  */
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import {
-  handleVerifyPhoneOtp,
-  type AuthVerifyDeps,
-} from "../functions/auth-verify/index.ts";
+import { type AuthVerifyDeps, handleVerifyPhoneOtp } from "../functions/auth-verify/index.ts";
 import { hashOtp } from "../functions/_shared/otp.ts";
 
 const USER_ID = "11111111-1111-1111-1111-111111111111";
@@ -15,15 +12,13 @@ const PHONE = "2207123456";
 async function makeDeps(code: string | null) {
   const now = new Date("2026-10-20T12:00:00.000Z");
   const writes: Array<{ url: string; body: Record<string, unknown> }> = [];
-  const rows = code === null
-    ? []
-    : [{
-      id: "otp-row",
-      code_hash: await hashOtp(code),
-      expires_at: new Date(now.getTime() + 10 * 60_000).toISOString(),
-      attempts: 0,
-      consumed_at: null,
-    }];
+  const rows = code === null ? [] : [{
+    id: "otp-row",
+    code_hash: await hashOtp(code),
+    expires_at: new Date(now.getTime() + 10 * 60_000).toISOString(),
+    attempts: 0,
+    consumed_at: null,
+  }];
   const deps: AuthVerifyDeps = {
     postgrestUrl: "http://kong:8000",
     serviceRoleKey: "test-service-role-key",
@@ -33,10 +28,13 @@ async function makeDeps(code: string | null) {
     gowa: null,
     fetchImpl: (input, init) => {
       const url = String(input);
-      if (init?.method === "PATCH") {
+      if (init && "method" in init && init.method === "PATCH") {
         writes.push({
           url,
-          body: JSON.parse(String(init.body)) as Record<string, unknown>,
+          body: JSON.parse(String("body" in init ? init.body : undefined)) as Record<
+            string,
+            unknown
+          >,
         });
         return Promise.resolve(new Response(null, { status: 204 }));
       }

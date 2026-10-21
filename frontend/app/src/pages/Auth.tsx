@@ -5,7 +5,6 @@ import { Loader2 } from 'lucide-react'
 import { supabase, routeByRole } from '@/lib/supabase'
 import { friendlyAuthError } from '@/lib/authErrors'
 import gamfixLogo from '@/assets/gamfix-logo.png'
-import { StaffOtpSignIn } from '@/components/StaffOtpSignIn'
 import { Button } from '@/components/ui/button'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Label } from '@/components/ui/label'
@@ -373,8 +372,6 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
               </Button>
             )}
           </form>
-
-          {!isSignup && <StaffOtpSignIn email={email} />}
 
           <div className="my-6 flex items-center gap-3">
             <Separator className="flex-1" />

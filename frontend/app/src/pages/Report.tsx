@@ -451,7 +451,9 @@ export default function Report() {
           const payload = await error.context.clone().json().catch(() => null) as { error?: unknown } | null
           if (payload && typeof payload.error === 'string') code = payload.error
         }
-        const failureCode = normalizeCode(code ?? error.name)
+        const failureCode = normalizeCode(
+          code ?? (error.name === 'FunctionsFetchError' ? 'photo_service_unreachable' : error.name),
+        )
         console.error('citizen photo upload failed:', { name: error.name, code: failureCode })
         return failureCode
       }
@@ -951,7 +953,7 @@ export default function Report() {
             {photoFile && photoUploadFailed && (
               <div role="alert" className="mt-5 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-left">
                 <p className="text-sm font-medium text-destructive">
-                  Your report was filed, but we could not confirm the photo attachment. It may already be attached. Retry to check or finish the upload.
+                  Your report is saved. We could not confirm the photo attachment. Use the button below to check or try again. If the first upload completed, retry will detect it without creating another report.
                 </p>
                 {photoUploadFailureCode && (
                   <p className="mt-2 text-xs text-muted-foreground">
@@ -960,8 +962,8 @@ export default function Report() {
                 )}
                 <Button
                   type="button"
-                  variant="outline"
-                  className="mt-3"
+                  variant="default"
+                  className="mt-3 h-11 w-full justify-center font-semibold"
                   disabled={retryingPhotoUpload}
                   onClick={() => void retryPhotoAttachment()}
                 >
