@@ -1,6 +1,6 @@
-# Backend
+# Gamfix AI Backend
 
-This folder contains the database and server-side code for GamCiv AI.
+This folder contains the database and server-side code for Gamfix AI.
 
 - `db/` — PostgreSQL schema, migrations, permissions, and report-routing rules.
 - `functions/` — Supabase Edge Functions for WhatsApp and Telegram webhooks, AI classification, photo uploads, authentication, and notifications.

@@ -1,8 +1,19 @@
-# GamCiv AI
+# Gamfix AI
 
 [![CI](https://github.com/Foday-Sall/gamfix/actions/workflows/ci.yml/badge.svg)](https://github.com/Foday-Sall/gamfix/actions/workflows/ci.yml)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![Supabase](https://img.shields.io/badge/Supabase-self_hosted-3FCF8E?logo=supabase&logoColor=black)](https://supabase.com)
+[![Deno](https://img.shields.io/badge/Deno-2-70AD47?logo=deno&logoColor=white)](https://deno.com)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-RLS_and_RPCs-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com)
+[![Kong](https://img.shields.io/badge/Kong-gateway-000000)](https://konghq.com)
+[![Resend](https://img.shields.io/badge/Resend-email-000000)](https://resend.com)
+[![Workers AI](https://img.shields.io/badge/Workers_AI-classifier-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers-ai/)
 
-GamCiv AI helps people in The Gambia report local problems—such as water outages, potholes, and broken streetlights—and follow their progress. Reports can come from the web app, WhatsApp, or Telegram. AI helps classify and route them to the right public institution.
+Gamfix AI helps people in The Gambia report local problems—such as water outages, potholes, and broken streetlights—and follow their progress. Reports can come from the web app, WhatsApp, or Telegram. AI helps classify and route them to the right public institution.
 
 ## Live site
 
