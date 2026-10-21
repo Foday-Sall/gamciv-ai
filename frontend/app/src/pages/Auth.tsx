@@ -307,7 +307,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
             <p className="mt-2 max-w-sm text-muted-foreground">
               {isSignup
                 ? 'Create a free account to report public problems and follow them until they are fixed.'
-                : 'Sign in as a citizen or institution staff member to open your GamFix workspace.'}
+                : 'Sign in to report community problems or manage reports for your institution.'}
             </p>
           </div>
 
